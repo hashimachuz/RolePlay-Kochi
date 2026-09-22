@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Kochi 3D - Custom 3D Car Model Loader</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;font-family:Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;inset:0;color:#fff;text-shadow:0 2px 4px #000;pointer-events:none}
+.top{position:absolute;left:14px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);padding:8px 12px;border-radius:8px;font-weight:800;border:1px solid rgba(255,255,255,0.2)}
+
+#minimap-container{width:120px;height:120px;border-radius:50%;border:3px solid rgba(255,255,255,0.9);background:#111822;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}
+#minimap{width:120px;height:120px;display:block}
+
+.joy{position:absolute;left:20px;bottom:24px;width:140px;height:140px;border:2px solid rgba(255,255,255,0.4);border-radius:50%;background:rgba(0,0,0,0.25);pointer-events:auto}
+.stick{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px;border-radius:50%;background:rgba(255,255,255,0.4);border:2px solid rgba(255,255,255,0.8)}
+#look{position:absolute;left:170px;right:0;top:80px;bottom:0;pointer-events:auto}
+.cross{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border:2px solid #fff;border-radius:50%;opacity:0.8}
+
+.buttons{position:absolute;right:16px;bottom:20px;display:flex;gap:12px;align-items:flex-end;pointer-events:auto}
+.btn{min-width:62px;height:58px;border:2px solid rgba(255,255,255,0.5);border-radius:29px;background:rgba(0,0,0,0.65);color:#fff;font-weight:800;cursor:pointer}
+.btn:active{background:rgba(255,255,255,0.3)}
+
+#enter-btn{background:#eab308;color:#000;display:none}
+
+.pedal-box{display:none;gap:12px;align-items:flex-end}
+.btn-pedal{width:64px;height:84px;border-radius:14px;border:2px solid rgba(255,255,255,0.6);color:#fff;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#accel-btn{background:rgba(34,197,94,0.75)}
+#accel-btn:active{background:rgba(34,197,94,1)}
+#brake-btn{background:rgba(239,68,68,0.75)}
+#brake-btn:active{background:rgba(239,68,68,1)}
+</style>
+<!-- Three.js and GLTFLoader -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="hud">
+  <div class="top">
+    <div id="minimap-container">
+      <canvas id="minimap" width="120" height="120"></canvas>
+    </div>
+    <div class="pill">HP: <span id="hp">100</span></div>
+    <div class="pill">₹ 25,000</div>
+    <div class="pill" id="loc-indicator">KOCHI - MARINE DRIVE</div>
+    <div class="pill" id="cam-indicator">CAM: NORMAL</div>
+  </div>
+  <div id="look"><div class="cross"></div></div>
+  <div class="joy" id="joy"><div class="stick" id="stick"></div></div>
+  <div class="buttons">
+    <button class="btn" id="enter-btn">ENTER</button>
+
+    <div id="foot-buttons" style="display:flex;gap:10px;">
+      <button class="btn" id="run">RUN</button>
+      <button class="btn" id="jump">JUMP</button>
+    </div>
+
+    <div id="vehicle-pedals" class="pedal-box">
+      <div class="btn-pedal" id="brake-btn">BRAKE<br>REV</div>
+      <div class="btn-pedal" id="accel-btn">GAS</div>
+    </div>
+
+    <button class="btn" id="cam">CAM</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+let audioCtx = null;
+let oscBass = null, oscMid = null;
+let engineMaster = null;
+let brakeNoiseNode = null, brakeGain = null;
+let lastStepTime = 0;
+
+function initAudio() {
+  if (audioCtx) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  audioCtx = new AudioContext();
+
+  engineMaster = audioCtx.createGain();
+  engineMaster.gain.setValueAtTime(0, audioCtx.currentTime);
+  engineMaster.connect(audioCtx.destination);
+
+  oscBass = audioCtx.createOscillator();
+  oscBass.type = 'sawtooth';
+  oscBass.frequency.setValueAtTime(32, audioCtx.currentTime);
+
+  const bassFilter = audioCtx.createBiquadFilter();
+  bassFilter.type = 'lowpass';
+  bassFilter.frequency.setValueAtTime(140, audioCtx.currentTime);
+  oscBass.connect(bassFilter);
+  bassFilter.connect(engineMaster);
+  oscBass.start();
+
+  oscMid = audioCtx.createOscillator();
+  oscMid.type = 'triangle';
+  oscMid.frequency.setValueAtTime(64, audioCtx.currentTime);
+
+  const midFilter = audioCtx.createBiquadFilter();
+  midFilter.type = 'bandpass';
+  midFilter.frequency.setValueAtTime(260, audioCtx.currentTime);
+  midFilter.Q.setValueAtTime(2.0, audioCtx.currentTime);
+  oscMid.connect(midFilter);
+  midFilter.connect(engineMaster);
+  oscMid.start();
+
+  const bufferSize = audioCtx.sampleRate * 2;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+  brakeNoiseNode = audioCtx.createBufferSource();
+  brakeNoiseNode.buffer = noiseBuffer;
+  brakeNoiseNode.loop = true;
+
+  const brakeFilter = audioCtx.createBiquadFilter();
+  brakeFilter.type = 'bandpass';
+  brakeFilter.frequency.setValueAtTime(800, audioCtx.currentTime);
+  brakeFilter.Q.setValueAtTime(3.0, audioCtx.currentTime);
+
+  brakeGain = audioCtx.createGain();
+  brakeGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+  brakeNoiseNode.connect(brakeFilter);
+  brakeFilter.connect(brakeGain);
+  brakeGain.connect(audioCtx.destination);
+  brakeNoiseNode.start();
+}
+
+function playCarDoorFull() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+
+  const clickOsc = audioCtx.createOscillator();
+  const clickGain = audioCtx.createGain();
+  clickOsc.type = 'triangle';
+  clickOsc.frequency.setValueAtTime(850, t);
+  clickOsc.frequency.exponentialRampToValueAtTime(120, t + 0.05);
+
+  clickGain.gain.setValueAtTime(0.35, t);
+  clickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+  clickOsc.connect(clickGain);
+  clickGain.connect(audioCtx.destination);
+  clickOsc.start(t);
+  clickOsc.stop(t + 0.05);
+
+  const slamT = t + 0.14;
+  const slamOsc = audioCtx.createOscillator();
+  const slamGain = audioCtx.createGain();
+
+  slamOsc.type = 'sawtooth';
+  slamOsc.frequency.setValueAtTime(140, slamT);
+  slamOsc.frequency.exponentialRampToValueAtTime(25, slamT + 0.22);
+
+  const slamFilter = audioCtx.createBiquadFilter();
+  slamFilter.type = 'lowpass';
+  slamFilter.frequency.setValueAtTime(220, slamT);
+
+  slamGain.gain.setValueAtTime(0.7, slamT);
+  slamGain.gain.exponentialRampToValueAtTime(0.001, slamT + 0.22);
+
+  slamOsc.connect(slamFilter);
+  slamFilter.connect(slamGain);
+  slamGain.connect(audioCtx.destination);
+
+  slamOsc.start(slamT);
+  slamOsc.stop(slamT + 0.22);
+}
+
+function playFootstep() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.06);
+
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.06);
+}
+
+window.addEventListener('pointerdown', () => {
+  if (!audioCtx) initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: false });
+
+const canvas = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x7fc0ec);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 800);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.85);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xfffaed, 1.15);
+dirLight.position.set(100, 160, 80);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+// Environment
+const BLOCK_SIZE = 70; 
+const ROAD_WIDTH = 14; 
+const HALF_ROAD = ROAD_WIDTH / 2;
+const SIDEWALK_W = 2.4; 
+const GRID_MIN = -2; 
+const GRID_MAX = 3;  
+const colliders = [];
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(900, 900),
+  new THREE.MeshStandardMaterial({ color: 0x2e6630, roughness: 0.9 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const waterGeo = new THREE.PlaneGeometry(280, 900, 16, 16);
+const waterMat = new THREE.MeshStandardMaterial({ 
+  color: 0x0c4a6e, 
+  roughness: 0.12, 
+  metalness: 0.8,
+  transparent: true,
+  opacity: 0.95
+});
+const ocean = new THREE.Mesh(waterGeo, waterMat);
+ocean.rotation.x = -Math.PI / 2;
+ocean.position.set(-220, 0.2, 0);
+scene.add(ocean);
+
+const beach = new THREE.Mesh(
+  new THREE.PlaneGeometry(28, 900),
+  new THREE.MeshStandardMaterial({ color: 0xc89d66, roughness: 0.95 })
+);
+beach.rotation.x = -Math.PI / 2;
+beach.position.set(-66, 0.08, 0);
+beach.receiveShadow = true;
+scene.add(beach);
+
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
+for (let bz = -350; bz <= 350; bz += 5) {
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.2, 0), rockMat);
+  rock.scale.set(1.4, 0.8, 1.6);
+  rock.rotation.set((bz % 3) * 0.4, (bz % 5) * 0.3, 0);
+  rock.position.set(-79, 0.55, bz);
+  scene.add(rock);
+}
+
+// Road Setup
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x1a1e23, roughness: 0.92 });
+const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x78828c, roughness: 0.8 });
+const whiteDashMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+const roadCoords = [];
+for (let i = GRID_MIN; i <= GRID_MAX; i++) roadCoords.push(i * BLOCK_SIZE);
+
+const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 90;
+const CENTER_OFFSET = ((GRID_MAX + GRID_MIN) * BLOCK_SIZE) / 2;
+
+roadCoords.forEach(rx => {
+  const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMat);
+  rZ.rotation.x = -Math.PI / 2;
+  rZ.position.set(rx, 0.02, CENTER_OFFSET);
+  rZ.receiveShadow = true;
+  scene.add(rZ);
+
+  [-1, 1].forEach(side => {
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(SIDEWALK_W, 0.14, TOTAL_SPAN), sidewalkMat);
+    sw.position.set(rx + side * (HALF_ROAD + SIDEWALK_W / 2), 0.07, CENTER_OFFSET);
+    sw.receiveShadow = true;
+    scene.add(sw);
+  });
+
+  for (let z = -250; z <= 300; z += 14) {
+    let nearCross = false;
+    roadCoords.forEach(cz => {
+      if (Math.abs(z - cz) < HALF_ROAD + 2) nearCross = true;
+    });
+    if (nearCross) continue;
+
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 5.0), whiteDashMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(rx, 0.03, z);
+    scene.add(dash);
+  }
+});
+
+roadCoords.forEach(rz => {
+  const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMat);
+  rX.rotation.x = -Math.PI / 2;
+  rX.position.set(CENTER_OFFSET, 0.022, rz);
+  rX.receiveShadow = true;
+  scene.add(rX);
+
+  [-1, 1].forEach(side => {
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(TOTAL_SPAN, 0.14, SIDEWALK_W), sidewalkMat);
+    sw.position.set(CENTER_OFFSET, 0.07, rz + side * (HALF_ROAD + SIDEWALK_W / 2));
+    sw.receiveShadow = true;
+    scene.add(sw);
+  });
+
+  for (let x = -250; x <= 300; x += 14) {
+    let nearCross = false;
+    roadCoords.forEach(cx => {
+      if (Math.abs(x - cx) < HALF_ROAD + 2) nearCross = true;
+    });
+    if (nearCross) continue;
+
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 0.35), whiteDashMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(x, 0.032, rz);
+    scene.add(dash);
+  }
+});
+
+// Metro
+const pillarMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 });
+const trackMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, metalness: 0.5, roughness: 0.35 });
+
+for (let pz = -220; pz <= 280; pz += 30) {
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.75, 7.2, 12), pillarMat);
+  pillar.position.set(0, 3.6, pz);
+  pillar.castShadow = true;
+  scene.add(pillar);
+
+  colliders.push({
+    minX: -0.9, maxX: 0.9,
+    minZ: pz - 0.9, maxZ: pz + 0.9,
+    w: 1.8, d: 1.8, px: 0, pz: pz
+  });
+}
+
+const metroTrack = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.65, TOTAL_SPAN), trackMat);
+metroTrack.position.set(0, 7.4, CENTER_OFFSET);
+metroTrack.castShadow = true;
+scene.add(metroTrack);
+
+const metroTrain = new THREE.Group();
+const coachBodyMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.3 });
+const coachStripeMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.4 });
+const coachGlassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.1 });
+
+for (let c = -1; c <= 1; c++) {
+  const coach = new THREE.Group();
+  const cBody = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.5, 12), coachBodyMat);
+  cBody.position.y = 1.25;
+  coach.add(cBody);
+
+  const cStripe = new THREE.Mesh(new THREE.BoxGeometry(2.85, 0.45, 12.02), coachStripeMat);
+  cStripe.position.y = 1.15;
+  coach.add(cStripe);
+
+  const cGlass = new THREE.Mesh(new THREE.BoxGeometry(2.86, 0.8, 10.5), coachGlassMat);
+  cGlass.position.y = 1.7;
+  coach.add(cGlass);
+
+  coach.position.z = c * 13.2;
+  metroTrain.add(coach);
+}
+metroTrain.position.set(0, 7.7, 0);
+scene.add(metroTrain);
+let trainSpeed = 22.0;
+
+// Skid Engine
+const skidSegments = [];
+let prevLeftWheel = null;
+let prevRightWheel = null;
+
+function addSkidRibbon(p1, p2) {
+  const dist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+  if (dist < 0.1) return;
+
+  const midX = (p1.x + p2.x) / 2;
+  const midZ = (p1.z + p2.z) / 2;
+  const angle = Math.atan2(p2.x - p1.x, p2.z - p1.z);
+
+  const geo = new THREE.PlaneGeometry(0.34, dist);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.65, depthWrite: false });
+  const mesh = new THREE.Mesh(geo, mat);
+
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.z = -angle;
+  mesh.position.set(midX, 0.035, midZ);
+
+  scene.add(mesh);
+  skidSegments.push({ mesh, life: 5.5 });
+}
+
+function updateSkidMarks(dt) {
+  for (let i = skidSegments.length - 1; i >= 0; i--) {
+    const s = skidSegments[i];
+    s.life -= dt;
+    if (s.life < 1.5) s.mesh.material.opacity = Math.max(0, s.life / 1.5) * 0.65;
+    if (s.life <= 0) {
+      scene.remove(s.mesh);
+      s.mesh.geometry.dispose();
+      s.mesh.material.dispose();
+      skidSegments.splice(i, 1);
+    }
+  }
+}
+
+// Player Character Rig
+const playerGroup = new THREE.Group();
+scene.add(playerGroup);
+
+const skinMat = new THREE.MeshStandardMaterial({ color: 0x8a5531, roughness: 0.8 });
+const shirtMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7 });
+const jeansMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+
+const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 12), shirtMat);
+torsoMesh.position.y = 1.28;
+torsoMesh.castShadow = true;
+playerGroup.add(torsoMesh);
+
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.15, 8), skinMat);
+neck.position.y = 1.68;
+playerGroup.add(neck);
+
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), skinMat);
+head.position.y = 1.88;
+head.castShadow = true;
+playerGroup.add(head);
+
+const armL = new THREE.Group();
+armL.position.set(-0.42, 1.55, 0);
+const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
+armLMesh.position.y = -0.31;
+armLMesh.castShadow = true;
+armL.add(armLMesh);
+playerGroup.add(armL);
+
+const armR = new THREE.Group();
+armR.position.set(0.42, 1.55, 0);
+const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
+armRMesh.position.y = -0.31;
+armRMesh.castShadow = true;
+armR.add(armRMesh);
+playerGroup.add(armR);
+
+const legL = new THREE.Group();
+legL.position.set(-0.2, 0.92, 0);
+const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
+legLMesh.position.y = -0.39;
+legLMesh.castShadow = true;
+legL.add(legLMesh);
+
+const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
+shoeL.position.set(0, -0.78, 0.06);
+shoeL.castShadow = true;
+legL.add(shoeL);
+playerGroup.add(legL);
+
+const legR = new THREE.Group();
+legR.position.set(0.2, 0.92, 0);
+const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
+legRMesh.position.y = -0.39;
+legRMesh.castShadow = true;
+legR.add(legRMesh);
+
+const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
+shoeR.position.set(0, -0.78, 0.06);
+shoeR.castShadow = true;
+legR.add(shoeR);
+playerGroup.add(legR);
+
+// ==========================================
+// GLTF CAR LOADER INTEGRATION
+// ==========================================
+const car = {
+  group: new THREE.Group(),
+  x: -BLOCK_SIZE + 3.8,
+  z: 14,
+  speed: 0,
+  maxSpeed: 32,
+  accel: 25,
+  friction: 7,
+  angle: 0
+};
+scene.add(car.group);
+
+// Realistic Headlights
+const headlightL = new THREE.SpotLight(0xfffaed, 4.0, 45, Math.PI / 6, 0.35);
+headlightL.position.set(-0.7, 0.8, 1.8);
+const headlightR = new THREE.SpotLight(0xfffaed, 4.0, 45, Math.PI / 6, 0.35);
+headlightR.position.set(0.7, 0.8, 1.8);
+
+const headTarget = new THREE.Object3D();
+headTarget.position.set(0, 0.3, 20);
+car.group.add(headTarget);
+headlightL.target = headTarget;
+headlightR.target = headTarget;
+
+car.group.add(headlightL);
+car.group.add(headlightR);
+
+// Load GLB Model (car.glb)
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.load(
+  'car.glb',
+  function (gltf) {
+    const model = gltf.scene;
+    // Kenney car models scale
+    model.scale.set(1.4, 1.4, 1.4);
+    model.rotation.y = Math.PI; // Face forward
+    model.traverse((node) => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    car.group.add(model);
+    console.log("3D Car loaded successfully!");
+  },
+  undefined,
+  function (error) {
+    console.warn("car.glb not found in folder. Using fallback shape.");
+    const fallbackMesh = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.6, 4.3), new THREE.MeshStandardMaterial({ color: 0xdc2626 }));
+    fallbackMesh.position.y = 0.5;
+    car.group.add(fallbackMesh);
+  }
+);
+
+car.group.position.set(car.x, 0, car.z);
+
+// Game Controller States
+const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
+let inCar = false;
+let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
+let pedalGas = false, pedalBrake = false;
+let lastTime = performance.now(), animTime = 0;
+const lookTarget = new THREE.Vector3(0, 1.4, 0);
+
+let camMode = 0;
+
+camera.position.set(player.x, 3.2, player.z - 6.5);
+camera.lookAt(player.x, 1.4, player.z);
+
+function checkCollision(px, pz) {
+  const r = inCar ? 1.3 : player.radius;
+  for (let i = 0; i < colliders.length; i++) {
+    const c = colliders[i];
+    if (
+      px + r > c.minX &&
+      px - r < c.maxX &&
+      pz + r > c.minZ &&
+      pz - r < c.maxZ
+    ) return true;
+  }
+  return false;
+}
+
+const enterBtn = document.getElementById('enter-btn');
+const runBtn = document.getElementById('run');
+const jumpBtn = document.getElementById('jump');
+const footButtons = document.getElementById('foot-buttons');
+const vehiclePedals = document.getElementById('vehicle-pedals');
+const accelBtn = document.getElementById('accel-btn');
+const brakeBtn = document.getElementById('brake-btn');
+const camIndicator = document.getElementById('cam-indicator');
+
+function cycleCameraMode() {
+  camMode = (camMode + 1) %
