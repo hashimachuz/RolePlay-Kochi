@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - CJ Fixed Edition</title>
+<title>Kochi 3D - CJ Fully Fixed Edition</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -78,6 +78,17 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
 let pedalGas = false;
 let pedalBrake = false;
 let cjBaseY = 0;
+let mixer = null;
+let walkAction = null;
+let idleAction = null;
+
+// Procedural limb references for CJ
+const limbs = {
+  leftArm: null,
+  rightArm: null,
+  leftLeg: null,
+  rightLeg: null
+};
 
 let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
@@ -122,9 +133,9 @@ function playFootstep() {
   if (!audioCtx) return;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.05);
-  gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+  osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.05);
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
   osc.connect(gain);
   gain.connect(audioCtx.destination);
@@ -169,7 +180,7 @@ const GRID_MIN = -2;
 const GRID_MAX = 2;  
 const colliders = [];
 
-// Built-in Road Texture (Prevents CORS / missing texture issues)
+// Built-in Road Texture
 function createRoadCanvas(horizontal = false) {
   const c = document.createElement('canvas');
   c.width = 512;
@@ -398,7 +409,7 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
-const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
+const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, targetAngle: 0, radius: 0.5 };
 let currentVehicle = null;
 let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
 let lastTime = performance.now(), animTime = 0;
@@ -411,7 +422,7 @@ gltfLoader.load('CJ.glb', function (gltf) {
   cjModel = gltf.scene;
   cjModel.scale.set(1.2, 1.2, 1.2);
   
-  // Orient model 180 deg so CJ faces forward away from camera
+  // Orient model 180 deg so CJ faces away from camera
   cjModel.rotation.y = Math.PI;
   cjModel.updateMatrixWorld(true);
 
@@ -424,15 +435,34 @@ gltfLoader.load('CJ.glb', function (gltf) {
   cjModel.position.x -= center.x;
   cjModel.position.z -= center.z;
 
+  // Search bones for procedural animation if needed
   cjModel.traverse(node => {
     if (node.isMesh) {
       node.castShadow = true;
       node.receiveShadow = true;
     }
+    if (node.isBone) {
+      const bName = node.name.toLowerCase();
+      if ((bName.includes('arm') || bName.includes('shoulder')) && bName.includes('l')) limbs.leftArm = node;
+      else if ((bName.includes('arm') || bName.includes('shoulder')) && bName.includes('r')) limbs.rightArm = node;
+      else if ((bName.includes('leg') || bName.includes('thigh') || bName.includes('up')) && bName.includes('l')) limbs.leftLeg = node;
+      else if ((bName.includes('leg') || bName.includes('thigh') || bName.includes('up')) && bName.includes('r')) limbs.rightLeg = node;
+    }
   });
+
+  // Setup AnimationMixer if clips exist in GLTF
+  if (gltf.animations && gltf.animations.length > 0) {
+    mixer = new THREE.AnimationMixer(cjModel);
+    walkAction = mixer.clipAction(gltf.animations[0]);
+    if (gltf.animations.length > 1) {
+      idleAction = mixer.clipAction(gltf.animations[1]);
+      idleAction.play();
+    }
+  }
 
   playerGroup.add(cjModel);
 }, undefined, function() {
+  // Fallback CJ
   const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
   charBody.position.y = 0.85;
   charBody.castShadow = true;
@@ -501,6 +531,10 @@ brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 // 6. SIMULATION LOOP
 function update(dt) {
   animTime += dt;
+
+  if (mixer) {
+    mixer.update(dt);
+  }
 
   metroTrain.position.z += trainSpeed * dt;
   if (metroTrain.position.z > 350) { metroTrain.position.z = 350; trainSpeed = -26.0; }
@@ -597,35 +631,66 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING CJ
+    // WALKING & RUNNING CJ
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
     const isRunning = running || k.shift;
     const speed = isRunning ? 9.5 : 4.5;
+    const animFreq = isRunning ? 16 : 9;
 
     if (isMoving) {
-      const dx = (-iz * Math.sin(yaw) - ix * Math.cos(yaw)) * speed * dt;
-      const dz = (-iz * Math.cos(yaw) + ix * Math.sin(yaw)) * speed * dt;
+      const moveAngle = Math.atan2(ix, -iz);
+      player.targetAngle = yaw + moveAngle;
+
+      // Smooth rotation towards movement direction
+      let diff = player.targetAngle - player.angle;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      player.angle += diff * Math.min(1, dt * 14.0);
+
+      const dx = Math.sin(player.angle) * speed * dt;
+      const dz = -Math.cos(player.angle) * speed * dt;
 
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      player.angle = Math.atan2(dx, dz);
-
-      if (cjModel) {
-        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * 12)) * 0.08;
-        cjModel.rotation.z = Math.sin(animTime * 12) * 0.04;
+      // Handle Built-in Animations
+      if (walkAction && !walkAction.isRunning()) {
+        if (idleAction) idleAction.stop();
+        walkAction.play();
       }
 
-      if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
+      // Procedural Limb Swing / Bobbing
+      if (cjModel) {
+        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * animFreq)) * 0.07;
+        cjModel.rotation.z = Math.sin(animTime * animFreq * 0.5) * 0.05;
+
+        // Limb swinging
+        const swing = Math.sin(animTime * animFreq) * (isRunning ? 0.85 : 0.5);
+        if (limbs.leftArm) limbs.leftArm.rotation.x = swing;
+        if (limbs.rightArm) limbs.rightArm.rotation.x = -swing;
+        if (limbs.leftLeg) limbs.leftLeg.rotation.x = -swing;
+        if (limbs.rightLeg) limbs.rightLeg.rotation.x = swing;
+      }
+
+      if (animTime - lastStepTime > (isRunning ? 0.24 : 0.42)) {
         playFootstep();
         lastStepTime = animTime;
       }
     } else {
+      if (walkAction && walkAction.isRunning()) {
+        walkAction.stop();
+        if (idleAction) idleAction.play();
+      }
+
       if (cjModel) {
         cjModel.position.y = cjBaseY;
         cjModel.rotation.z = 0;
+        // Reset limbs
+        if (limbs.leftArm) limbs.leftArm.rotation.x = 0;
+        if (limbs.rightArm) limbs.rightArm.rotation.x = 0;
+        if (limbs.leftLeg) limbs.leftLeg.rotation.x = 0;
+        if (limbs.rightLeg) limbs.rightLeg.rotation.x = 0;
       }
     }
 
