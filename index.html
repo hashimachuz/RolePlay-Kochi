@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Real Sports Car Edition</title>
+<title>Kochi 3D - HD Textured Edition</title>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
 #game{position:fixed;inset:0;width:100%;height:100%;display:block}
 .hud{position:fixed;inset:0;color:#fff;pointer-events:none}
 
 /* Compact Clean HUD */
-.top-hud-left{position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:6px;background:rgba(15,23,42,0.8);backdrop-filter:blur(6px);padding:6px 12px;border-radius:18px;border:1px solid rgba(255,255,255,0.3);box-shadow:0 4px 10px rgba(0,0,0,0.3)}
+.top-hud-left{position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:6px;background:rgba(15,23,42,0.85);backdrop-filter:blur(6px);padding:6px 12px;border-radius:18px;border:1px solid rgba(255,255,255,0.3);box-shadow:0 4px 10px rgba(0,0,0,0.3)}
 .heart-icon{font-size:13px}
 .bar-bg{width:85px;height:7px;background:rgba(0,0,0,0.85);border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.4)}
 .bar-fill{width:100%;height:100%;background:#22c55e}
 
-.top-hud-right{position:absolute;right:14px;top:14px;background:rgba(15,23,42,0.8);backdrop-filter:blur(6px);padding:6px 14px;border-radius:18px;border:1px solid rgba(255,255,255,0.3);font-size:14px;font-weight:900;color:#22c55e;letter-spacing:0.5px;box-shadow:0 4px 10px rgba(0,0,0,0.3)}
+.top-hud-right{position:absolute;right:14px;top:14px;background:rgba(15,23,42,0.85);backdrop-filter:blur(6px);padding:6px 14px;border-radius:18px;border:1px solid rgba(255,255,255,0.3);font-size:14px;font-weight:900;color:#22c55e;letter-spacing:0.5px;box-shadow:0 4px 10px rgba(0,0,0,0.3)}
 
 /* Controls */
 .joy{position:absolute;left:20px;bottom:24px;width:130px;height:130px;border:2px solid rgba(255,255,255,0.4);border-radius:50%;background:rgba(0,0,0,0.25);pointer-events:auto}
@@ -37,7 +37,6 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;fon
 #brake-btn{background:rgba(239,68,68,0.75)}
 #brake-btn:active{background:rgba(239,68,68,1)}
 </style>
-<!-- Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
@@ -76,7 +75,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;fon
 <script>
 'use strict';
 
-// 1. ENGINE AUDIO
+// 1. ENGINE AUDIO SYNTHESIZER
 let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
 function initAudio() {
@@ -135,30 +134,32 @@ window.addEventListener('pointerdown', () => {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }, { once: false });
 
-// 2. RENDERER SETUP
+// 2. RENDERER & HIGH CONTRAST LIGHTING
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.BasicShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x7fc0ec);
-scene.fog = new THREE.Fog(0x7fc0ec, 120, 500);
+scene.background = new THREE.Color(0x38bdf8);
+scene.fog = new THREE.FogExp2(0x38bdf8, 0.0035);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 550);
 
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.9);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e3a1e, 0.6);
 scene.add(hemiLight);
 
-const dirLight = new THREE.DirectionalLight(0xfffaed, 1.15);
-dirLight.position.set(100, 180, 80);
+const dirLight = new THREE.DirectionalLight(0xfffaed, 0.95);
+dirLight.position.set(110, 160, 90);
 dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
 scene.add(dirLight);
 
-// 3. WIDE ROADS & SINGLE PILLAR METRO
+// 3. ROAD TEXTURE & MESHES
 const BLOCK_SIZE = 100; 
 const ROAD_WIDTH = 22; 
 const HALF_ROAD = ROAD_WIDTH / 2;
@@ -167,17 +168,29 @@ const GRID_MIN = -2;
 const GRID_MAX = 2;  
 const colliders = [];
 
+// Texture Loader for Asphalt
+const texLoader = new THREE.TextureLoader();
+const roadTexZ = texLoader.load('road.png');
+roadTexZ.wrapS = THREE.RepeatWrapping;
+roadTexZ.wrapT = THREE.RepeatWrapping;
+roadTexZ.repeat.set(1, 14);
+
+const roadTexX = texLoader.load('road.png');
+roadTexX.wrapS = THREE.RepeatWrapping;
+roadTexX.wrapT = THREE.RepeatWrapping;
+roadTexX.repeat.set(14, 1);
+
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(900, 900),
-  new THREE.MeshLambertMaterial({ color: 0x24582a })
+  new THREE.MeshStandardMaterial({ color: 0x1e4a22, roughness: 0.85 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const roadMat = new THREE.MeshLambertMaterial({ color: 0x1a1d20 });
-const sidewalkMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
-const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+const roadMatZ = new THREE.MeshStandardMaterial({ map: roadTexZ, roughness: 0.8 });
+const roadMatX = new THREE.MeshStandardMaterial({ map: roadTexX, roughness: 0.8 });
+const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
 
 const roadCoords = [];
 for (let i = GRID_MIN; i <= GRID_MAX; i++) roadCoords.push(i * BLOCK_SIZE);
@@ -185,49 +198,41 @@ for (let i = GRID_MIN; i <= GRID_MAX; i++) roadCoords.push(i * BLOCK_SIZE);
 const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 220;
 const CENTER_OFFSET = ((GRID_MAX + GRID_MIN) * BLOCK_SIZE) / 2;
 
+// North-South Roads
 roadCoords.forEach(rx => {
-  const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMat);
+  const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMatZ);
   rZ.rotation.x = -Math.PI / 2;
   rZ.position.set(rx, 0.02, CENTER_OFFSET);
   rZ.receiveShadow = true;
   scene.add(rZ);
 
   [-1, 1].forEach(side => {
-    const sw = new THREE.Mesh(new THREE.BoxGeometry(SIDEWALK_W, 0.14, TOTAL_SPAN), sidewalkMat);
-    sw.position.set(rx + side * (HALF_ROAD + SIDEWALK_W / 2), 0.07, CENTER_OFFSET);
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(SIDEWALK_W, 0.12, TOTAL_SPAN), sidewalkMat);
+    sw.position.set(rx + side * (HALF_ROAD + SIDEWALK_W / 2), 0.06, CENTER_OFFSET);
     sw.receiveShadow = true;
     scene.add(sw);
   });
-
-  const yl = new THREE.Mesh(new THREE.PlaneGeometry(0.35, TOTAL_SPAN), yellowLineMat);
-  yl.rotation.x = -Math.PI / 2;
-  yl.position.set(rx, 0.03, CENTER_OFFSET);
-  scene.add(yl);
 });
 
+// East-West Roads
 roadCoords.forEach(rz => {
-  const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMat);
+  const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMatX);
   rX.rotation.x = -Math.PI / 2;
   rX.position.set(CENTER_OFFSET, 0.022, rz);
   rX.receiveShadow = true;
   scene.add(rX);
 
   [-1, 1].forEach(side => {
-    const sw = new THREE.Mesh(new THREE.BoxGeometry(TOTAL_SPAN, 0.14, SIDEWALK_W), sidewalkMat);
-    sw.position.set(CENTER_OFFSET, 0.07, rz + side * (HALF_ROAD + SIDEWALK_W / 2));
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(TOTAL_SPAN, 0.12, SIDEWALK_W), sidewalkMat);
+    sw.position.set(CENTER_OFFSET, 0.06, rz + side * (HALF_ROAD + SIDEWALK_W / 2));
     sw.receiveShadow = true;
     scene.add(sw);
   });
-
-  const yl = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, 0.35), yellowLineMat);
-  yl.rotation.x = -Math.PI / 2;
-  yl.position.set(CENTER_OFFSET, 0.032, rz);
-  scene.add(yl);
 });
 
 // Single Pillar Metro
-const pillarMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
-const trackDeckMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
+const pillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 });
+const trackDeckMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
 
 for (let pz = -350; pz <= 350; pz += 35) {
   const centerPillar = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.15, 8.5, 12), pillarMat);
@@ -244,11 +249,12 @@ for (let pz = -350; pz <= 350; pz += 35) {
 
 const trackDeck = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.7, TOTAL_SPAN), trackDeckMat);
 trackDeck.position.set(0, 9.1, CENTER_OFFSET);
+trackDeck.castShadow = true;
 scene.add(trackDeck);
 
 const metroTrain = new THREE.Group();
 for (let c = -1; c <= 1; c++) {
-  const coach = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.5, 13), new THREE.MeshLambertMaterial({ color: 0xf1f5f9 }));
+  const coach = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.5, 13), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 }));
   coach.position.set(0, 1.25, c * 14.0);
   metroTrain.add(coach);
 }
@@ -258,13 +264,15 @@ let trainSpeed = 26.0;
 
 function addPalmTree(x, z) {
   const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 6.0, 6), new THREE.MeshLambertMaterial({ color: 0x5a3e27 }));
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 6.0, 6), new THREE.MeshStandardMaterial({ color: 0x4a2e1b, roughness: 0.9 }));
   trunk.position.y = 3.0;
+  trunk.castShadow = true;
   tree.add(trunk);
 
-  const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.9, 6, 5), new THREE.MeshLambertMaterial({ color: 0x1d6a2a }));
+  const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.9, 6, 5), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.6 }));
   leaves.scale.set(1.5, 0.35, 1.5);
   leaves.position.y = 5.8;
+  leaves.castShadow = true;
   tree.add(leaves);
 
   tree.position.set(x, 0, z);
@@ -278,7 +286,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
 
     const bw = 32, bd = 32;
     const bh = 20 + ((Math.abs(bx * 7 + bz * 13)) % 20);
-    const bMesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), new THREE.MeshLambertMaterial({ color: (bx % 2 === 0) ? 0x0f2b48 : 0xd97706 }));
+    const bMesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), new THREE.MeshStandardMaterial({ color: (bx % 2 === 0) ? 0x0f2b48 : 0xb45309, roughness: 0.6 }));
     bMesh.position.set(lotCenterX, bh / 2, lotCenterZ);
     bMesh.castShadow = true;
     bMesh.receiveShadow = true;
@@ -291,9 +299,10 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
-// 4. REAL 3D SPORTS CAR (MAPPED WITH COLORMAP.PNG)
+// 4. REAL VEHICLES (CAR & REAL SPORTS BIKE)
 const vehicles = [];
 
+// SPORTS CAR
 function createSportsCar(x, z) {
   const v = {
     type: 'car',
@@ -301,91 +310,99 @@ function createSportsCar(x, z) {
     x: x, z: z,
     speed: 0, maxSpeed: 44, accel: 32, friction: 7.5, angle: 0,
     radius: 1.45,
-    wheels: [],
+    wheelsFront: [],
+    wheelsBack: [],
     sound: { bass: 36, bassR: 95, mid: 70, midR: 200 }
   };
 
-  // Safe procedural shape
-  const fallbackCar = new THREE.Group();
-  const fbChassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.45, 4.3), new THREE.MeshStandardMaterial({ color: 0xdc2626 }));
-  fbChassis.position.y = 0.45;
-  fallbackCar.add(fbChassis);
-  v.group.add(fallbackCar);
-
-  // Texture Loader for colormap.png
-  const textureLoader = new THREE.TextureLoader();
-  const carTexture = textureLoader.load('colormap.png');
-  carTexture.flipY = false;
-
   const gltfLoader = new THREE.GLTFLoader();
-  gltfLoader.load(
-    'car.glb',
-    function (gltf) {
-      const model = gltf.scene;
+  gltfLoader.setPath('./');
 
-      // Apply texture to all parts
-      model.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          if (child.material) {
-            child.material.map = carTexture;
-            child.material.needsUpdate = true;
-          }
+  gltfLoader.load('car.glb', function (gltf) {
+    const model = gltf.scene;
+
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        const name = child.name.toLowerCase();
+        if (name.includes('wheel')) {
+          if (name.includes('front')) v.wheelsFront.push(child);
+          else v.wheelsBack.push(child);
         }
-      });
+      }
+    });
 
-      // Fit to road scale & orientation
-      model.scale.set(1.4, 1.4, 1.4);
-      model.position.set(0, 0, 0);
-
-      v.group.remove(fallbackCar);
-      v.group.add(model);
-      console.log('Real 3D car.glb loaded with colormap.png!');
-    },
-    undefined,
-    function (err) {
-      console.error('Error loading car.glb:', err);
-    }
-  );
+    model.scale.set(1.5, 1.5, 1.5);
+    model.position.set(0, 0, 0);
+    v.group.add(model);
+  });
 
   v.group.position.set(v.x, 0, v.z);
   scene.add(v.group);
   return v;
 }
 
-// SPORTS BIKE
+// REAL SPORTS BIKE LOADER (bike.glb)
 function createSportsBike(x, z) {
   const v = {
     type: 'bike',
     group: new THREE.Group(),
     x: x, z: z,
-    speed: 0, maxSpeed: 46, accel: 36, friction: 7.0, angle: 0,
+    speed: 0, maxSpeed: 48, accel: 36, friction: 7.0, angle: 0,
     radius: 1.0,
-    wheels: [],
+    wheelsFront: [],
+    wheelsBack: [],
     sound: { bass: 55, bassR: 160, mid: 120, midR: 320 }
   };
 
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.25 }));
-  frame.position.y = 0.65;
-  frame.castShadow = true;
-  v.group.add(frame);
+  const bikeContainer = new THREE.Group();
+  v.group.add(bikeContainer);
 
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.65), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
-  seat.position.set(0, 0.86, -0.22);
-  v.group.add(seat);
+  const gltfLoader = new THREE.GLTFLoader();
+  gltfLoader.setPath('./');
 
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.12), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
-  handle.position.set(0, 1.08, 0.55);
-  v.group.add(handle);
+  // Loads your sports_bike.glb (renamed as bike.glb)
+  gltfLoader.load('bike.glb', function (gltf) {
+    const model = gltf.scene;
+    
+    // Scale adjustment for realism
+    model.scale.set(0.0085, 0.0085, 0.0085);
+    model.position.set(0, 0, 0);
 
-  [[0, 0.36, 1.0], [0, 0.36, -0.9]].forEach(pos => {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.18, 12), new THREE.MeshStandardMaterial({ color: 0x111827 }));
-    w.rotation.z = Math.PI / 2;
-    w.position.set(...pos);
-    w.castShadow = true;
-    v.group.add(w);
-    v.wheels.push(w);
+    model.traverse(node => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    bikeContainer.add(model);
+    console.log("Real sports bike loaded!");
+  }, undefined, function() {
+    // Procedural Fallback Bike
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.25 }));
+    frame.position.y = 0.65;
+    frame.castShadow = true;
+    bikeContainer.add(frame);
+
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.65), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+    seat.position.set(0, 0.86, -0.22);
+    bikeContainer.add(seat);
+
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.12), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+    handle.position.set(0, 1.08, 0.55);
+    bikeContainer.add(handle);
+
+    [[0, 0.36, 1.0], [0, 0.36, -0.9]].forEach((pos, idx) => {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.18, 16), new THREE.MeshStandardMaterial({ color: 0x111827 }));
+      w.rotation.z = Math.PI / 2;
+      w.position.set(...pos);
+      w.castShadow = true;
+      bikeContainer.add(w);
+      if (idx === 0) v.wheelsFront.push(w);
+      else v.wheelsBack.push(w);
+    });
   });
 
   v.group.position.set(v.x, 0, v.z);
@@ -413,52 +430,73 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. CHARACTER RIG
+// 5. CHARACTER RIG (FULL SHOES & BENT LEGS PROPERLY ANCHORED)
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
-const skinMat = new THREE.MeshLambertMaterial({ color: 0x8a5531 });
-const shirtMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
-const jeansMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+const skinMat = new THREE.MeshStandardMaterial({ color: 0x8a5531, roughness: 0.8 });
+const shirtMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7 });
+const jeansMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+const shoeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
 
 const pelvis = new THREE.Group();
 pelvis.position.y = 0.92;
 playerGroup.add(pelvis);
 
-const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 8), shirtMat);
+const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 10), shirtMat);
 torsoMesh.position.y = 0.36;
+torsoMesh.castShadow = true;
 pelvis.add(torsoMesh);
 
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), skinMat);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), skinMat);
 head.position.y = 0.96;
+head.castShadow = true;
 pelvis.add(head);
 
+// Left Arm
 const armL = new THREE.Group();
 armL.position.set(-0.42, 0.63, 0);
-const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 6), skinMat);
+const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
 armLMesh.position.y = -0.31;
+armLMesh.castShadow = true;
 armL.add(armLMesh);
 pelvis.add(armL);
 
+// Right Arm
 const armR = new THREE.Group();
 armR.position.set(0.42, 0.63, 0);
-const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 6), skinMat);
+const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
 armRMesh.position.y = -0.31;
+armRMesh.castShadow = true;
 armR.add(armRMesh);
 pelvis.add(armR);
 
+// Left Leg & Shoes
 const legL = new THREE.Group();
 legL.position.set(-0.2, 0, 0);
-const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 6), jeansMat);
+const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
 legLMesh.position.y = -0.39;
+legLMesh.castShadow = true;
 legL.add(legLMesh);
+
+const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.34), shoeMat);
+shoeL.position.set(0, -0.84, 0.06);
+shoeL.castShadow = true;
+legL.add(shoeL);
 pelvis.add(legL);
 
+// Right Leg & Shoes
 const legR = new THREE.Group();
 legR.position.set(0.2, 0, 0);
-const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 6), jeansMat);
+const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
 legRMesh.position.y = -0.39;
+legRMesh.castShadow = true;
 legR.add(legRMesh);
+
+const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.34), shoeMat);
+shoeR.position.set(0, -0.84, 0.06);
+shoeR.castShadow = true;
+legR.add(shoeR);
 pelvis.add(legR);
 
 const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
@@ -555,7 +593,7 @@ accelBtn.addEventListener('pointerdown', () => pedalGas = true);
 brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(e => brakeBtn.addEventListener(e, () => pedalBrake = false));
 
-// 6. MAIN SIMULATION LOOP
+// 6. SIMULATION & ANIMATION LOOP
 function update(dt) {
   animTime += dt;
 
@@ -625,8 +663,19 @@ function update(dt) {
       if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
 
-    const roll = (cv.speed * dt) / 0.38;
-    cv.wheels.forEach(w => w.rotation.x += roll);
+    // Wheel Roll & Steer Turns
+    const rollSpeed = (cv.speed * dt) / 0.38;
+    if (cv.wheelsFront) {
+      cv.wheelsFront.forEach(w => {
+        w.rotation.x += rollSpeed;
+        w.rotation.y = -steer * 0.45;
+      });
+    }
+    if (cv.wheelsBack) {
+      cv.wheelsBack.forEach(w => {
+        w.rotation.x += rollSpeed;
+      });
+    }
 
     const vx = Math.sin(cv.angle) * cv.speed * dt;
     const vz = Math.cos(cv.angle) * cv.speed * dt;
@@ -662,6 +711,7 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
+    // WALKING
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
