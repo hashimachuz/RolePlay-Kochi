@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Fixed Movement & Animation Edition</title>
+<title>Kochi 3D - Final Fixed Character Animation</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -414,7 +414,8 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel = gltf.scene;
   cjModel.scale.set(1.15, 1.15, 1.15);
   
-  cjModel.rotation.set(0, 0, 0);
+  // ക്യാരക്ടർ ഫ്രണ്ടിലേക്ക് നോക്കുന്ന രീതിയിൽ ശരിയായ റൊട്ടേഷൻ (Y axis rotation adjustment)
+  cjModel.rotation.set(0, Math.PI, 0);
   cjModel.updateMatrixWorld(true);
 
   const bbox = new THREE.Box3().setFromObject(cjModel);
@@ -426,7 +427,7 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel.position.x -= center.x;
   cjModel.position.z -= center.z;
 
-  // സ്കെലിറ്റൻ ബോണുകൾ കണ്ടെത്തുന്നു (നടക്കുമ്പോൾ കൈകാലുകൾ അനങ്ങാൻ)
+  // സ്രോതസ്സിലെ ബോണുകൾ കണ്ടെത്തുക (കൈകാലുകൾ സ്വാഭാവികമായി അനങ്ങാൻ)
   cjModel.traverse(node => {
     if (node.isMesh) {
       node.castShadow = true;
@@ -446,6 +447,7 @@ gltfLoader.load('character.glb', function (gltf) {
   if (gltf.animations && gltf.animations.length > 0) {
     mixer = new THREE.AnimationMixer(cjModel);
     animAction = mixer.clipAction(gltf.animations[0]);
+    animAction.play();
   }
 }, undefined, function() {
   const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
@@ -612,7 +614,7 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING / RUNNING & PROCEDURAL LIMB SWING
+    // WALKING / RUNNING & DYNAMIC PROCEDURAL ANIMATION
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
@@ -626,13 +628,13 @@ function update(dt) {
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      // ക്യാരക്ടർ കൃത്യമായ ദിശയിലേക്ക് തിരിക്കാൻ (മാത്രമല്ല ഫ്രണ്ട്-ബാക്ക് എറർ ഒഴിവാക്കാൻ Math.PI കൂട്ടിയിരിക്കുന്നു)
-      player.angle = Math.atan2(dx, dz) + Math.PI;
+      // ക്യാരക്ടർ ഇനി കൃത്യമായി ഫ്രണ്ടിലേക്ക് നോക്കി നീങ്ങും
+      player.angle = Math.atan2(dx, dz);
 
-      // നടക്കുമ്പോൾ കൈകാലുകൾ സ്വാഭാവികമായി വീശാൻ (Procedural Swing)
-      const swingSpeed = isRunning ? 18 : 12;
-      const armSwing = Math.sin(animTime * swingSpeed) * 0.7;
-      const legSwing = Math.sin(animTime * swingSpeed) * 0.8;
+      // തത്സമയമുള്ള കൈകാലുകളുടെ മൂവ്മെന്റുകൾ (Natural Walking/Running Cycle)
+      const swingSpeed = isRunning ? 22 : 14;
+      const armSwing = Math.sin(animTime * swingSpeed) * 0.85;
+      const legSwing = Math.sin(animTime * swingSpeed) * 0.95;
 
       if (leftArmBone) leftArmBone.rotation.x = armSwing;
       if (rightArmBone) rightArmBone.rotation.x = -armSwing;
@@ -640,8 +642,8 @@ function update(dt) {
       if (rightLegBone) rightLegBone.rotation.x = legSwing;
 
       if (cjModel) {
-        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * swingSpeed)) * 0.09;
-        cjModel.rotation.z = Math.sin(animTime * swingSpeed * 0.5) * 0.04;
+        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * swingSpeed)) * 0.12;
+        cjModel.rotation.z = Math.sin(animTime * swingSpeed * 0.5) * 0.05;
       }
 
       if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
@@ -655,7 +657,7 @@ function update(dt) {
         mixer.update(dt);
       }
 
-      // ബോണുകൾ സ്റ്റാൻഡേർഡ് പൊസിഷനിലേക്ക് കൊണ്ടുവരുക
+      // നിൽക്കുമ്പോൾ കൈകാലുകൾ നേരെയാക്കുക
       if (leftArmBone) leftArmBone.rotation.set(0, 0, 0);
       if (rightArmBone) rightArmBone.rotation.set(0, 0, 0);
       if (leftLegBone) leftLegBone.rotation.set(0, 0, 0);
