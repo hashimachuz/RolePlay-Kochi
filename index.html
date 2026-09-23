@@ -75,7 +75,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
 <script>
 'use strict';
 
-// 1. AUDIO SYNTHESIS
+// 1. ENGINE AUDIO SYNTHESIZER
 let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
 function initAudio() {
@@ -134,7 +134,7 @@ window.addEventListener('pointerdown', () => {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }, { once: false });
 
-// 2. RENDERER & LIGHTING
+// 2. RENDERER & HIGH CONTRAST LIGHTING
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -297,7 +297,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
-// 4. VEHICLES INTEGRATION (CAR & AUTO-NORMALIZED KAWASAKI NINJA BIKE)
+// 4. VEHICLES INTEGRATION
 const vehicles = [];
 
 // SPORTS CAR
@@ -342,16 +342,16 @@ function createSportsCar(x, z) {
   return v;
 }
 
-// KAWASAKI NINJA BIKE (ROBUST BOUNDING-BOX AUTO SCALER)
+// REAL SPORTS BIKE WITH ACCURATE SCALING & REALISTIC PROPORTIONS
 function createSportsBike(x, z) {
   const v = {
     type: 'bike',
     group: new THREE.Group(),
     x: x, z: z,
     speed: 0, maxSpeed: 48, accel: 38, friction: 7.0, angle: 0,
-    radius: 1.2,
-    wheelsFront: [],
-    wheelsBack: [],
+    radius: 1.4,
+    wheels: [],
+    steerNode: null,
     sound: { bass: 55, bassR: 160, mid: 120, midR: 320 }
   };
 
@@ -365,16 +365,15 @@ function createSportsBike(x, z) {
     gltfLoader.load(fileName, function (gltf) {
       const model = gltf.scene;
       
-      // Calculate Bounding Box to normalize millimeter scales
       model.updateMatrixWorld(true);
       const bbox = new THREE.Box3().setFromObject(model);
       const size = new THREE.Vector3();
       bbox.getSize(size);
 
-      // Target size: ~2.2 meters in game coordinates
+      // Target real motorcycle length: ~2.45 meters (True to human scale)
       const maxDim = Math.max(size.x, size.y, size.z);
       if (maxDim > 0) {
-        const targetScale = 2.2 / maxDim;
+        const targetScale = 2.45 / maxDim;
         model.scale.set(targetScale, targetScale, targetScale);
       }
 
@@ -393,31 +392,35 @@ function createSportsBike(x, z) {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
+          const name = node.name.toLowerCase();
+          if (name.includes('wheel') || name.includes('tire')) {
+            v.wheels.push(node);
+          }
         }
       });
 
       bikeContainer.add(model);
-      console.log(fileName + " auto-scaled and mounted at ground level!");
+      v.modelNode = model;
+      console.log(fileName + " auto-scaled and mounted at natural human proportion!");
     }, undefined, fallback);
   }
 
-  // Attempts bike.glb first, then sports_bike.glb, then procedural
   tryLoadBike('bike.glb', function() {
     tryLoadBike('sports_bike.glb', function() {
-      console.warn("bike.glb not found, using procedural model.");
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.3 }));
-      frame.position.y = 0.65;
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.75, 2.2), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.3 }));
+      frame.position.y = 0.75;
       bikeContainer.add(frame);
 
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.65), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
-      seat.position.set(0, 0.86, -0.22);
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.15, 0.75), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+      seat.position.set(0, 0.95, -0.22);
       bikeContainer.add(seat);
 
-      [[0, 0.36, 1.0], [0, 0.36, -0.9]].forEach((pos) => {
-        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.18, 16), new THREE.MeshStandardMaterial({ color: 0x111827 }));
+      [[0, 0.42, 1.1], [0, 0.42, -1.0]].forEach((pos) => {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 16), new THREE.MeshStandardMaterial({ color: 0x111827 }));
         w.rotation.z = Math.PI / 2;
         w.position.set(...pos);
         bikeContainer.add(w);
+        v.wheels.push(w);
       });
     });
   });
@@ -562,14 +565,22 @@ function toggleVehicle() {
         scene.remove(playerGroup);
         currentVehicle.group.add(playerGroup);
 
-        playerGroup.position.set(0, 0.48, -0.22);
+        // REALISTIC SUPERBIKE SEATED ERGONOMICS (NATURAL FIT TO SEAT & TANK)
+        playerGroup.position.set(0, 0.28, -0.15);
         playerGroup.rotation.set(0, 0, 0);
-        pelvis.position.y = 0.52;
-        torsoMesh.rotation.x = 0.28;
-        armL.rotation.set(-0.75, 0.22, -0.15);
-        armR.rotation.set(-0.75, -0.22, 0.15);
-        legL.rotation.set(-1.15, 0.28, -0.1);
-        legR.rotation.set(-1.15, -0.28, 0.1);
+        pelvis.position.y = 0.58;
+
+        // Chest leans aggressively over fuel tank
+        torsoMesh.rotation.x = 0.52;
+        head.rotation.x = -0.32; // Look up ahead
+
+        // Hands angled forward onto clip-on handlebars
+        armL.rotation.set(-0.95, 0.32, -0.35);
+        armR.rotation.set(-0.95, -0.32, 0.35);
+
+        // Legs bent naturally backward on rear-set footpegs
+        legL.rotation.set(-1.45, 0.38, -0.22);
+        legR.rotation.set(-1.45, -0.38, 0.22);
       } else {
         playerGroup.visible = false;
       }
@@ -578,8 +589,11 @@ function toggleVehicle() {
     if (currentVehicle.type === 'bike') {
       currentVehicle.group.remove(playerGroup);
       scene.add(playerGroup);
+
+      // Restore standing posture
       pelvis.position.y = 0.92;
       torsoMesh.rotation.x = 0;
+      head.rotation.x = 0;
       armL.rotation.set(0, 0, 0);
       armR.rotation.set(0, 0, 0);
       legL.rotation.set(0, 0, 0);
@@ -668,8 +682,9 @@ function update(dt) {
       const turnRate = cv.type === 'bike' ? 2.6 : 2.0;
       cv.angle -= steer * turnRate * dir * dt;
 
+      // Realistic Superbike Banking into high-speed corners
       if (cv.type === 'bike') {
-        cv.group.rotation.z = -steer * 0.38 * Math.min(1, Math.abs(cv.speed) / 12);
+        cv.group.rotation.z = -steer * 0.42 * Math.min(1, Math.abs(cv.speed) / 14);
       }
 
       if (!drag && camMode !== 2) {
@@ -681,7 +696,7 @@ function update(dt) {
       if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
 
-    // Car Wheels Animation
+    // Wheel Roll & Steer Animations
     const rollSpeed = (cv.speed * dt) / 0.38;
     if (cv.wheelsFront) {
       cv.wheelsFront.forEach(w => {
@@ -691,6 +706,11 @@ function update(dt) {
     }
     if (cv.wheelsBack) {
       cv.wheelsBack.forEach(w => {
+        w.rotation.x += rollSpeed;
+      });
+    }
+    if (cv.wheels) {
+      cv.wheels.forEach(w => {
         w.rotation.x += rollSpeed;
       });
     }
