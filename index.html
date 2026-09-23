@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - CJ Edition</title>
+<title>Kochi 3D - CJ Fixed Edition</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -74,6 +74,10 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
 
 <script>
 'use strict';
+
+let pedalGas = false;
+let pedalBrake = false;
+let cjBaseY = 0;
 
 let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
@@ -165,17 +169,6 @@ const GRID_MIN = -2;
 const GRID_MAX = 2;  
 const colliders = [];
 
-const texLoader = new THREE.TextureLoader();
-const roadTexZ = texLoader.load('road.png');
-roadTexZ.wrapS = THREE.RepeatWrapping;
-roadTexZ.wrapT = THREE.RepeatWrapping;
-roadTexZ.repeat.set(1, 14);
-
-const roadTexX = texLoader.load('road.png');
-roadTexX.wrapS = THREE.RepeatWrapping;
-roadTexX.wrapT = THREE.RepeatWrapping;
-roadTexX.repeat.set(14, 1);
-
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(900, 900),
   new THREE.MeshStandardMaterial({ color: 0x1e4a22, roughness: 0.85 })
@@ -184,8 +177,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const roadMatZ = new THREE.MeshStandardMaterial({ map: roadTexZ, roughness: 0.8 });
-const roadMatX = new THREE.MeshStandardMaterial({ map: roadTexX, roughness: 0.8 });
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.85 });
 const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
 
 const roadCoords = [];
@@ -195,7 +187,7 @@ const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 220;
 const CENTER_OFFSET = ((GRID_MAX + GRID_MIN) * BLOCK_SIZE) / 2;
 
 roadCoords.forEach(rx => {
-  const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMatZ);
+  const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMat);
   rZ.rotation.x = -Math.PI / 2;
   rZ.position.set(rx, 0.02, CENTER_OFFSET);
   rZ.receiveShadow = true;
@@ -210,7 +202,7 @@ roadCoords.forEach(rx => {
 });
 
 roadCoords.forEach(rz => {
-  const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMatX);
+  const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMat);
   rX.rotation.x = -Math.PI / 2;
   rX.position.set(CENTER_OFFSET, 0.022, rz);
   rX.receiveShadow = true;
@@ -292,7 +284,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
-// 4. VEHICLES (CAR ONLY)
+// 4. VEHICLES (CAR)
 const vehicles = [];
 
 function createSportsCar(x, z) {
@@ -308,8 +300,6 @@ function createSportsCar(x, z) {
   };
 
   const gltfLoader = new THREE.GLTFLoader();
-  gltfLoader.setPath('./');
-
   gltfLoader.load('car.glb', function (gltf) {
     const model = gltf.scene;
     model.traverse((child) => {
@@ -326,6 +316,12 @@ function createSportsCar(x, z) {
     model.scale.set(1.5, 1.5, 1.5);
     model.position.set(0, 0, 0);
     v.group.add(model);
+  }, undefined, function() {
+    // Fallback car body if car.glb is missing
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.1, 4.4), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3 }));
+    body.position.y = 0.8;
+    body.castShadow = true;
+    v.group.add(body);
   });
 
   v.group.position.set(v.x, 0, v.z);
@@ -352,7 +348,7 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. PROTAGONIST RIG (CJ.glb WITH BOUNDING BOX AUTO-ELEVATION)
+// 5. PROTAGONIST RIG
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
@@ -364,29 +360,18 @@ const lookTarget = new THREE.Vector3(0, 1.4, 0);
 
 let cjModel = null;
 const gltfLoader = new THREE.GLTFLoader();
-gltfLoader.setPath('./');
 
 gltfLoader.load('CJ.glb', function (gltf) {
   cjModel = gltf.scene;
-
-  // Auto-scale and lift up so feet stand precisely on pavement (Y=0)
+  cjModel.scale.set(1.2, 1.2, 1.2);
   cjModel.updateMatrixWorld(true);
+
   const bbox = new THREE.Box3().setFromObject(cjModel);
-  const size = new THREE.Vector3();
-  bbox.getSize(size);
-
-  const targetHeight = 1.75; // Standard human height in meters
-  if (size.y > 0) {
-    const scaleFactor = targetHeight / size.y;
-    cjModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-  }
-
-  cjModel.updateMatrixWorld(true);
-  const updatedBox = new THREE.Box3().setFromObject(cjModel);
-  cjModel.position.y = -updatedBox.min.y; // Fixes sinking underground
+  cjBaseY = -bbox.min.y;
+  cjModel.position.y = cjBaseY;
 
   const center = new THREE.Vector3();
-  updatedBox.getCenter(center);
+  bbox.getCenter(center);
   cjModel.position.x -= center.x;
   cjModel.position.z -= center.z;
 
@@ -398,9 +383,13 @@ gltfLoader.load('CJ.glb', function (gltf) {
   });
 
   playerGroup.add(cjModel);
-  console.log("CJ model auto-aligned to ground level!");
-}, undefined, function(err) {
-  console.warn("CJ.glb load error, using fallback.");
+}, undefined, function() {
+  // Fallback CJ character if CJ.glb is missing
+  const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
+  charBody.position.y = 0.85;
+  charBody.castShadow = true;
+  playerGroup.add(charBody);
+  cjBaseY = 0;
 });
 
 let camMode = 0;
@@ -577,7 +566,7 @@ function update(dt) {
       player.angle = Math.atan2(dx, dz);
 
       if (cjModel) {
-        cjModel.position.y = Math.abs(Math.sin(animTime * 12)) * 0.08;
+        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * 12)) * 0.08;
       }
 
       if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
@@ -585,7 +574,7 @@ function update(dt) {
         lastStepTime = animTime;
       }
     } else {
-      if (cjModel) cjModel.position.y = 0;
+      if (cjModel) cjModel.position.y = cjBaseY;
     }
 
     player.vy -= 22 * dt;
