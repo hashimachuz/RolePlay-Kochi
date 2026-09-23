@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Direct Physics Movement</title>
+<title>Kochi 3D - Direction 100% Fixed</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -76,7 +76,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
 let pedalGas = false;
 let pedalBrake = false;
 
-let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null;
+let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
 function initAudio() {
   if (audioCtx) return;
@@ -113,6 +113,20 @@ function playCarDoorFull() {
   gain.connect(audioCtx.destination);
   osc.start(t);
   osc.stop(t + 0.06);
+}
+
+function playFootstep() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.04);
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.04);
 }
 
 window.addEventListener('pointerdown', () => {
@@ -323,6 +337,7 @@ function createSportsCar(x, z) {
     x: x, z: z,
     speed: 0, maxSpeed: 44, accel: 32, friction: 7.5, angle: 0,
     radius: 1.45,
+    wheelAngleX: 0,
     wheelsFront: [],
     wheelsBack: [],
     sound: { bass: 36, bassR: 95, mid: 70, midR: 200 }
@@ -343,6 +358,7 @@ function createSportsCar(x, z) {
         child.receiveShadow = true;
         const name = child.name.toLowerCase();
         if (name.includes('wheel')) {
+          child.rotation.order = 'YXZ';
           if (name.includes('front')) v.wheelsFront.push(child);
           else v.wheelsBack.push(child);
         }
@@ -376,38 +392,102 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. CLEAN STATIC PLAYER (ആനിമേഷൻ ഇല്ലാത്ത കൃത്യമായ ക്യാരക്ടർ)
+// 5. ANIMATED DELIVERY BOY RIG (മുന്നോട്ട് ഫേസ് ചെയ്യുന്ന ഡെലിവറി ബോയ്)
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
-// Character Body
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 });
-const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 1.4, 16), bodyMat);
-charBody.position.y = 0.7;
-charBody.castShadow = true;
-playerGroup.add(charBody);
+function createDeliveryBoyRig() {
+  const root = new THREE.Group();
 
-// Head
-const headMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 });
-const charHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), headMat);
-charHead.position.y = 1.52;
-charHead.castShadow = true;
-playerGroup.add(charHead);
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xc68642, roughness: 0.7 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.6 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+  const shoeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4 });
+  const bagMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5 });
+  const capMat = new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.6 });
 
-// Visor / Forward Pointer (മുൻവശം തിരിച്ചറിയാനുള്ള ഫ്രണ്ട് മാർക്കർ)
-const pointerMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
-const charVisor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.2), pointerMat);
-charVisor.position.set(0, 1.52, 0.18);
-playerGroup.add(charVisor);
+  // Torso
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.65, 0.28), shirtMat);
+  torso.position.y = 1.05;
+  torso.castShadow = true;
+  root.add(torso);
+
+  // Delivery Bag (Backpack at Z < 0)
+  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.5, 0.26), bagMat);
+  bag.position.set(0, 1.05, -0.22);
+  bag.castShadow = true;
+  root.add(bag);
+
+  // Head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), skinMat);
+  head.position.y = 1.55;
+  head.castShadow = true;
+  root.add(head);
+
+  // Cap (Visor at Z > 0 Facing Forward)
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16), capMat);
+  cap.position.set(0, 1.68, 0);
+  root.add(cap);
+  const capVisor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.02, 0.16), capMat);
+  capVisor.position.set(0, 1.65, 0.14);
+  root.add(capVisor);
+
+  function buildLeg(x) {
+    const hipPivot = new THREE.Group();
+    hipPivot.position.set(x, 0.72, 0);
+
+    const legMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), pantsMat);
+    legMesh.position.y = -0.35;
+    legMesh.castShadow = true;
+    hipPivot.add(legMesh);
+
+    // Shoe front
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.12, 0.28), shoeMat);
+    shoe.position.set(0, -0.68, 0.06);
+    shoe.castShadow = true;
+    hipPivot.add(shoe);
+
+    root.add(hipPivot);
+    return hipPivot;
+  }
+
+  function buildArm(x) {
+    const shoulderPivot = new THREE.Group();
+    shoulderPivot.position.set(x, 1.32, 0);
+
+    const armMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.58, 0.14), shirtMat);
+    armMesh.position.y = -0.28;
+    armMesh.castShadow = true;
+    shoulderPivot.add(armMesh);
+
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), skinMat);
+    hand.position.y = -0.58;
+    shoulderPivot.add(hand);
+
+    root.add(shoulderPivot);
+    return shoulderPivot;
+  }
+
+  const leftLeg = buildLeg(-0.16);
+  const rightLeg = buildLeg(0.16);
+  const leftArm = buildArm(-0.35);
+  const rightArm = buildArm(0.35);
+
+  return { root, leftLeg, rightLeg, leftArm, rightArm };
+}
+
+const deliveryBoy = createDeliveryBoyRig();
+playerGroup.add(deliveryBoy.root);
 
 const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
 let currentVehicle = null;
 let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
 let lastTime = performance.now();
 const lookTarget = new THREE.Vector3(0, 1.4, 0);
+let walkCycle = 0;
 
 let camMode = 0;
-camera.position.set(player.x, 3.2, player.z - 6.5);
+camera.position.set(player.x, 3.2, player.z + 5.5);
 camera.lookAt(player.x, 1.4, player.z);
 
 const enterBtn = document.getElementById('enter-btn');
@@ -525,16 +605,19 @@ function update(dt) {
       }
     }
 
-    const rollSpeed = (cv.speed * dt) / 0.38;
+    const rollDelta = (cv.speed * dt) / 0.38;
+    cv.wheelAngleX += rollDelta;
+
     if (cv.wheelsFront) {
       cv.wheelsFront.forEach(w => {
-        w.rotation.x += rollSpeed;
-        w.rotation.y = -steer * 0.45;
+        w.rotation.order = 'YXZ';
+        w.rotation.y = -steer * 0.5;
+        w.rotation.x = cv.wheelAngleX;
       });
     }
     if (cv.wheelsBack) {
       cv.wheelsBack.forEach(w => {
-        w.rotation.x += rollSpeed;
+        w.rotation.x = cv.wheelAngleX;
       });
     }
 
@@ -562,39 +645,63 @@ function update(dt) {
 
   } else {
     // -------------------------------------------------------------------------
-    // DIRECT CAMERA-RELATIVE MOVEMENT (തെന്നൽ ഇല്ലാത്ത കൃത്യമായ കണക്കുകൂട്ടൽ)
+    // 100% BULLETPROOF CAMERA-RELATIVE CONTROLS (NO INVERSIONS)
     // -------------------------------------------------------------------------
     const len = Math.hypot(ix, iz);
-    const isMoving = len > 0.1;
+    const isMoving = len > 0.15;
     const isRunning = running || k.shift;
-    const speed = isRunning ? 10.0 : 5.0;
+
+    const moveSpeed = isRunning ? 6.2 : 3.4;
 
     if (isMoving) {
-      // 1. ക്യാമറയുടെ കോണുകൾ അടിസ്ഥാനമാക്കി ഫോർവേഡ് & റൈറ്റ് വെക്ടറുകൾ കണ്ടെത്തുന്നു
-      const forwardX = Math.sin(yaw);
-      const forwardZ = Math.cos(yaw);
-      const rightX = Math.cos(yaw);
-      const rightZ = -Math.sin(yaw);
+      // ക്യാമറയുടെ കൃത്യമായ ഫോർവേഡ് & റൈറ്റ് ദിശകൾ
+      // ക്യാമറ പ്ലെയറിന് പുറകിൽ നിൽക്കുമ്പോൾ ഫോർവേഡ് ദിശ:
+      const camForwardX = Math.sin(yaw);
+      const camForwardZ = Math.cos(yaw);
+      const camRightX   = -Math.cos(yaw);
+      const camRightZ   = Math.sin(yaw);
 
-      // 2. ഇൻപുട്ടിനനുസരിച്ച് വെലോസിറ്റി തിട്ടപ്പെടുത്തുന്നു (iz = -1 മുന്നോട്ട്, iz = +1 പിന്നോട്ട്)
-      const inputX = ix / len;
-      const inputZ = iz / len;
+      const normX = ix / len; // +1 = Right, -1 = Left
+      const normZ = iz / len; // -1 = Forward (Up), +1 = Backward (Down)
 
-      const moveX = (rightX * inputX - forwardX * inputZ);
-      const moveZ = (rightZ * inputX - forwardZ * inputZ);
+      // iz < 0 ആകുമ്പോൾ (-normZ) പോസിറ്റീവ് ആയി ഫോർവേഡിലേക്ക് നീങ്ങുന്നു
+      const moveX = (camForwardX * (-normZ)) + (camRightX * normX);
+      const moveZ = (camForwardZ * (-normZ)) + (camRightZ * normX);
 
-      const dx = moveX * speed * dt;
-      const dz = moveZ * speed * dt;
+      const dx = moveX * moveSpeed * dt;
+      const dz = moveZ * moveSpeed * dt;
 
-      // 3. കൊളീഷൻ ചെക്ക് ചെയ്ത് നീങ്ങുന്നു
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      // 4. ക്യാരക്ടർ പോകുന്ന കൃത്യമായ ആംഗിളിലേക്ക് തിരിയുന്നു
+      // ക്യാരക്ടറിന്റെ ഫേസിംഗ്: ചലിക്കുന്ന ദിശയിലേക്ക് തന്നെ തിരിയുന്നു
       const targetAngle = Math.atan2(moveX, moveZ);
       let diff = targetAngle - player.angle;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       player.angle += diff * Math.min(1.0, dt * 18.0);
+
+      // കാലുകളുടെ ആനിമേഷൻ (തെന്നാതെ കൃത്യമായ നടത്തം)
+      walkCycle += dt * (isRunning ? 14 : 9);
+      const legAngle = Math.sin(walkCycle) * (isRunning ? 0.75 : 0.55);
+      const armAngle = Math.sin(walkCycle) * (isRunning ? 0.65 : 0.45);
+
+      deliveryBoy.leftLeg.rotation.x = legAngle;
+      deliveryBoy.rightLeg.rotation.x = -legAngle;
+      deliveryBoy.leftArm.rotation.x = -armAngle;
+      deliveryBoy.rightArm.rotation.x = armAngle;
+
+      deliveryBoy.root.position.y = Math.abs(Math.sin(walkCycle)) * 0.05;
+
+      if (performance.now() - lastStepTime > (isRunning ? 260 : 420)) {
+        playFootstep();
+        lastStepTime = performance.now();
+      }
+    } else {
+      deliveryBoy.leftLeg.rotation.x *= 0.8;
+      deliveryBoy.rightLeg.rotation.x *= 0.8;
+      deliveryBoy.leftArm.rotation.x *= 0.8;
+      deliveryBoy.rightArm.rotation.x *= 0.8;
+      deliveryBoy.root.position.y *= 0.8;
     }
 
     // ഗ്രാവിറ്റി
@@ -626,6 +733,7 @@ window.keys = {};
 addEventListener('keydown', e => window.keys[e.key.toLowerCase()] = true);
 addEventListener('keyup', e => window.keys[e.key.toLowerCase()] = false);
 
+// ജോയ്സ്റ്റിക് ഇൻപുട്ട് റീഡിങ്
 const joy = document.getElementById('joy'), stick = document.getElementById('stick');
 let joyActive = false;
 function joySet(e) {
@@ -642,6 +750,7 @@ joy.addEventListener('pointermove', e => { if (joyActive) joySet(e); });
   joyActive = false; joyX = 0; joyY = 0; stick.style.transform = 'translate(0, 0)';
 }));
 
+// ക്യാമറ ലുക്ക് / പാൻ കൺട്രോൾ
 const look = document.getElementById('look');
 look.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; look.setPointerCapture(e.pointerId); });
 look.addEventListener('pointermove', e => {
