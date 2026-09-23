@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Animated Character Edition</title>
+<title>Kochi 3D - Fixed Movement & Animation</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -81,6 +81,7 @@ let cjBaseY = 0;
 
 let mixer = null;
 let animAction = null;
+let leftArmBone = null, rightArmBone = null, leftLegBone = null, rightLegBone = null;
 
 let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
@@ -396,7 +397,7 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. PROTAGONIST RIG (LOADS character.glb)
+// 5. PROTAGONIST RIG
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
@@ -409,13 +410,12 @@ const lookTarget = new THREE.Vector3(0, 1.4, 0);
 let cjModel = null;
 const gltfLoader = new THREE.GLTFLoader();
 
-// ybot GLB ഫയൽ ഇവിടെ ലോഡ് ചെയ്യുന്നു
 gltfLoader.load('character.glb', function (gltf) {
   cjModel = gltf.scene;
-  cjModel.scale.set(1.1, 1.1, 1.1);
+  cjModel.scale.set(1.15, 1.15, 1.15);
   
-  // ക്യാരക്ടർ മുൻപിലേക്ക് നോക്കി നിൽക്കാൻ
-  cjModel.rotation.y = Math.PI;
+  // അടിസ്ഥാന ഓറിയന്റേഷൻ നേരിട്ട് പൂജ്യത്തിൽ നിർത്തി ഗ്രൂപ്പ് വഴിയാണ് തിരിക്കുന്നത്
+  cjModel.rotation.set(0, 0, 0);
   cjModel.updateMatrixWorld(true);
 
   const bbox = new THREE.Box3().setFromObject(cjModel);
@@ -427,23 +427,31 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel.position.x -= center.x;
   cjModel.position.z -= center.z;
 
+  // സ്കെലിറ്റൻ ബോണുകൾ കണ്ടെത്തുക (Procedural limb swing backup)
   cjModel.traverse(node => {
     if (node.isMesh) {
       node.castShadow = true;
       node.receiveShadow = true;
     }
+    if (node.isBone) {
+      const bname = node.name.toLowerCase();
+      if (bname.includes('leftarm') || bname.includes('leftforearm')) leftArmBone = node;
+      if (bname.includes('rightarm') || bname.includes('rightforearm')) rightArmBone = node;
+      if (bname.includes('leftleg') || bname.includes('leftupleg')) leftLegBone = node;
+      if (bname.includes('rightleg') || bname.includes('rightupleg')) rightLegBone = node;
+    }
   });
 
   playerGroup.add(cjModel);
 
-  // ആനിമേഷൻ പ്ലേ ചെയ്യുന്നു
+  // മോഡലിൽ ആനിമേഷൻ ക്ലിപ്പ് ഉണ്ടെങ്കിൽ പ്ലേ ചെയ്യുന്നു
   if (gltf.animations && gltf.animations.length > 0) {
     mixer = new THREE.AnimationMixer(cjModel);
     animAction = mixer.clipAction(gltf.animations[0]);
+    animAction.setEffectiveTimeScale(1.0);
     animAction.play();
   }
 }, undefined, function() {
-  // character.glb ലഭ്യമല്ലെങ്കിൽ വരാനുള്ള ബാക്കപ്പ്
   const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
   charBody.position.y = 0.85;
   charBody.castShadow = true;
@@ -512,9 +520,6 @@ brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 // 6. SIMULATION LOOP
 function update(dt) {
   animTime += dt;
-
-  // ആനിമേഷൻ മിക്സർ അപ്ഡേറ്റ്
-  if (mixer) mixer.update(dt);
 
   metroTrain.position.z += trainSpeed * dt;
   if (metroTrain.position.z > 350) { metroTrain.position.z = 350; trainSpeed = -26.0; }
@@ -611,7 +616,7 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING / RUNNING
+    // WALKING & RUNNING (FIXED DIRECTION & ANIMATION)
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
@@ -619,17 +624,34 @@ function update(dt) {
     const speed = isRunning ? 9.5 : 4.5;
 
     if (isMoving) {
+      // ക്യാമറ വ്യൂ അടിസ്ഥാനമാക്കിയുള്ള യഥാർത്ഥ മൂവ്മെന്റ്
       const dx = (-iz * Math.sin(yaw) - ix * Math.cos(yaw)) * speed * dt;
       const dz = (-iz * Math.cos(yaw) + ix * Math.sin(yaw)) * speed * dt;
 
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      player.angle = Math.atan2(dx, dz);
+      // പുറകിലോട്ട് പോകുന്നത് ഒഴിവാക്കാൻ ദിശ കൃത്യമായി തിരിക്കുന്നു (Math.PI ഓഫ്‌സെറ്റ്)
+      player.angle = Math.atan2(dx, dz) + Math.PI;
 
-      // ബോഡി ഇളക്കം
-      if (cjModel) {
-        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * 12)) * 0.04;
+      // ഫയലിലെ ആനിമേഷൻ ഉണ്ടെങ്കിൽ അത് സ്പീഡിൽ പ്ലേ ചെയ്യുക
+      if (mixer && animAction) {
+        mixer.update(dt * (isRunning ? 2.0 : 1.2));
+      } else {
+        // ഇൻ-ബിൽറ്റ് ബോൺ ആനിമേഷൻ ബാക്കപ്പ് (കൈകാലുകൾ അനങ്ങാൻ)
+        const swingSpeed = isRunning ? 16 : 10;
+        const armSwing = Math.sin(animTime * swingSpeed) * 0.55;
+        const legSwing = Math.sin(animTime * swingSpeed) * 0.65;
+
+        if (leftArmBone) leftArmBone.rotation.x = armSwing;
+        if (rightArmBone) rightArmBone.rotation.x = -armSwing;
+        if (leftLegBone) leftLegBone.rotation.x = -legSwing;
+        if (rightLegBone) rightLegBone.rotation.x = legSwing;
+
+        if (cjModel) {
+          cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * swingSpeed)) * 0.09;
+          cjModel.rotation.z = Math.sin(animTime * swingSpeed) * 0.03;
+        }
       }
 
       if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
@@ -637,8 +659,18 @@ function update(dt) {
         lastStepTime = animTime;
       }
     } else {
-      if (cjModel) {
-        cjModel.position.y = cjBaseY;
+      // നിൽക്കുമ്പോൾ ആനിമേഷൻ സ്വാഭാവികമായി നിർത്തുക / റിലാക്സ് ചെയ്യുക
+      if (mixer && animAction) {
+        mixer.update(dt * 0.6); // ഇളം അനക്കത്തോടെ ഐഡിൽ
+      } else {
+        if (leftArmBone) leftArmBone.rotation.x = 0;
+        if (rightArmBone) rightArmBone.rotation.x = 0;
+        if (leftLegBone) leftLegBone.rotation.x = 0;
+        if (rightLegBone) rightLegBone.rotation.x = 0;
+        if (cjModel) {
+          cjModel.position.y = cjBaseY;
+          cjModel.rotation.z = 0;
+        }
       }
     }
 
