@@ -405,8 +405,8 @@ let lastTime = performance.now();
 const lookTarget = new THREE.Vector3(0, 1.4, 0);
 
 let cjModel = null;
-const gltfLoader = new THREE.GLTFLoader();
 
+const gltfLoader = new THREE.GLTFLoader();
 gltfLoader.load('character.glb', function (gltf) {
   cjModel = gltf.scene;
   cjModel.scale.set(1.15, 1.15, 1.15);
@@ -610,15 +610,17 @@ function update(dt) {
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
     const isRunning = running || k.shift;
-    const speed = isRunning ? 9.5 : 4.5;
+    
+    const speed = isRunning ? 8.0 : 3.5; 
 
-    // നടുമ്പോൾ ആനിമേഷൻ സ്പീഡ് ഓട്ടോമാറ്റിക്കായി അഡ്ജസ്റ്റ് ചെയ്യുന്നു
     if (animAction) {
       if (isMoving) {
-        animAction.timeScale = isRunning ? 1.8 : 1.0;
+        animAction.paused = false; 
+        animAction.timeScale = isRunning ? 1.5 : 1.0; 
         if (!animAction.isRunning()) animAction.play();
       } else {
-        animAction.timeScale = 0.5;
+        animAction.paused = true; 
+        animAction.time = 0; 
       }
     }
 
