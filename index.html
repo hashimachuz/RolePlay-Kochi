@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Fixed Forward Direction</title>
+<title>Kochi 3D - Direct Physics Movement</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -76,11 +76,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
 let pedalGas = false;
 let pedalBrake = false;
 
-let mixer = null;
-let animAction = null;
-let walkCycle = 0;
-
-let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
+let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null;
 
 function initAudio() {
   if (audioCtx) return;
@@ -117,20 +113,6 @@ function playCarDoorFull() {
   gain.connect(audioCtx.destination);
   osc.start(t);
   osc.stop(t + 0.06);
-}
-
-function playFootstep() {
-  if (!audioCtx) return;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.05);
-  gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.05);
 }
 
 window.addEventListener('pointerdown', () => {
@@ -394,113 +376,35 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. PROTAGONIST RIG & FALLBACK
+// 5. CLEAN STATIC PLAYER (ആനിമേഷൻ ഇല്ലാത്ത കൃത്യമായ ക്യാരക്ടർ)
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
+
+// Character Body
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 });
+const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 1.4, 16), bodyMat);
+charBody.position.y = 0.7;
+charBody.castShadow = true;
+playerGroup.add(charBody);
+
+// Head
+const headMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 });
+const charHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), headMat);
+charHead.position.y = 1.52;
+charHead.castShadow = true;
+playerGroup.add(charHead);
+
+// Visor / Forward Pointer (മുൻവശം തിരിച്ചറിയാനുള്ള ഫ്രണ്ട് മാർക്കർ)
+const pointerMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+const charVisor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.2), pointerMat);
+charVisor.position.set(0, 1.52, 0.18);
+playerGroup.add(charVisor);
 
 const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
 let currentVehicle = null;
 let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
 let lastTime = performance.now();
 const lookTarget = new THREE.Vector3(0, 1.4, 0);
-
-let cjModel = null;
-let proceduralRig = null;
-
-// Dynamic Fallback Character (GLB ഇല്ലാത്തപ്പോൾ)
-function createFallbackCharacter() {
-  const root = new THREE.Group();
-  const matSkin = new THREE.MeshStandardMaterial({ color: 0xd4a373 });
-  const matShirt = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.6 });
-  const matPants = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
-
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.3), matShirt);
-  torso.position.y = 1.05;
-  torso.castShadow = true;
-  root.add(torso);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), matSkin);
-  head.position.y = 1.6;
-  head.castShadow = true;
-  root.add(head);
-
-  const leftLegPivot = new THREE.Group();
-  leftLegPivot.position.set(-0.16, 0.7, 0);
-  const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.2), matPants);
-  leftLeg.position.y = -0.35;
-  leftLeg.castShadow = true;
-  leftLegPivot.add(leftLeg);
-  root.add(leftLegPivot);
-
-  const rightLegPivot = new THREE.Group();
-  rightLegPivot.position.set(0.16, 0.7, 0);
-  const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.2), matPants);
-  rightLeg.position.y = -0.35;
-  rightLeg.castShadow = true;
-  rightLegPivot.add(rightLeg);
-  root.add(rightLegPivot);
-
-  const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-0.36, 1.35, 0);
-  const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.15), matShirt);
-  leftArm.position.y = -0.3;
-  leftArm.castShadow = true;
-  leftArmPivot.add(leftArm);
-  root.add(leftArmPivot);
-
-  const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(0.36, 1.35, 0);
-  const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.15), matShirt);
-  rightArm.position.y = -0.3;
-  rightArm.castShadow = true;
-  rightArmPivot.add(rightArm);
-  root.add(rightArmPivot);
-
-  return { root, leftLegPivot, rightLegPivot, leftArmPivot, rightArmPivot };
-}
-
-proceduralRig = createFallbackCharacter();
-playerGroup.add(proceduralRig.root);
-
-// Load GLTF Model
-const gltfLoader = new THREE.GLTFLoader();
-gltfLoader.load('character.glb', function (gltf) {
-  if (proceduralRig) {
-    playerGroup.remove(proceduralRig.root);
-    proceduralRig = null;
-  }
-  cjModel = gltf.scene;
-  cjModel.scale.set(1.15, 1.15, 1.15);
-  
-  // ക്യാരക്ടറിന്റെ ഡിഫോൾട്ട് ഫ്രണ്ട് ഫേസിംഗ് നിലനിർത്തുന്നു
-  cjModel.rotation.set(0, 0, 0);
-
-  const bbox = new THREE.Box3().setFromObject(cjModel);
-  const cjBaseY = -bbox.min.y;
-  cjModel.position.y = cjBaseY;
-
-  const center = new THREE.Vector3();
-  bbox.getCenter(center);
-  cjModel.position.x -= center.x;
-  cjModel.position.z -= center.z;
-
-  cjModel.traverse(node => {
-    if (node.isMesh) {
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
-  });
-
-  playerGroup.add(cjModel);
-
-  if (gltf.animations && gltf.animations.length > 0) {
-    mixer = new THREE.AnimationMixer(cjModel);
-    animAction = mixer.clipAction(gltf.animations[0]);
-    animAction.play();
-  }
-}, undefined, function() {
-  console.log("Using dynamic procedural character fallback.");
-});
 
 let camMode = 0;
 camera.position.set(player.x, 3.2, player.z - 6.5);
@@ -658,65 +562,42 @@ function update(dt) {
 
   } else {
     // -------------------------------------------------------------------------
-    // FORWARD DIRECTION & PROPER VECTOR CALCULATION FIX
+    // DIRECT CAMERA-RELATIVE MOVEMENT (തെന്നൽ ഇല്ലാത്ത കൃത്യമായ കണക്കുകൂട്ടൽ)
     // -------------------------------------------------------------------------
     const len = Math.hypot(ix, iz);
-    const isMoving = len > 0.15;
+    const isMoving = len > 0.1;
     const isRunning = running || k.shift;
-
-    const moveSpeed = isRunning ? 5.8 : 2.8;
-    const animRate  = isRunning ? 1.4 : 0.85;
+    const speed = isRunning ? 10.0 : 5.0;
 
     if (isMoving) {
-      const normX = ix / len;
-      const normZ = iz / len;
-      
-      // മുന്നോട്ടുള്ള ആംഗിൾ കൃത്യമാക്കാൻ normZ നെ -1 കൊണ്ട് ഗുണിക്കുന്നു
-      const moveAngle = Math.atan2(normX, normZ) + yaw;
+      // 1. ക്യാമറയുടെ കോണുകൾ അടിസ്ഥാനമാക്കി ഫോർവേഡ് & റൈറ്റ് വെക്ടറുകൾ കണ്ടെത്തുന്നു
+      const forwardX = Math.sin(yaw);
+      const forwardZ = Math.cos(yaw);
+      const rightX = Math.cos(yaw);
+      const rightZ = -Math.sin(yaw);
 
-      // കോർഡിനേറ്റ് മാറ്റം: മുന്നോട്ട് പോകുമ്പോൾ ക്യാമറ ദിശയിലേക്ക് തന്നെ പ്രവേശിക്കുന്നു
-      const dx = -Math.sin(moveAngle) * moveSpeed * dt;
-      const dz = -Math.cos(moveAngle) * moveSpeed * dt;
+      // 2. ഇൻപുട്ടിനനുസരിച്ച് വെലോസിറ്റി തിട്ടപ്പെടുത്തുന്നു (iz = -1 മുന്നോട്ട്, iz = +1 പിന്നോട്ട്)
+      const inputX = ix / len;
+      const inputZ = iz / len;
 
+      const moveX = (rightX * inputX - forwardX * inputZ);
+      const moveZ = (rightZ * inputX - forwardZ * inputZ);
+
+      const dx = moveX * speed * dt;
+      const dz = moveZ * speed * dt;
+
+      // 3. കൊളീഷൻ ചെക്ക് ചെയ്ത് നീങ്ങുന്നു
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      // ക്യാരക്ടർ നീങ്ങുന്ന അതേ വശത്തേക്ക് മുന്നോട്ട് ഫേസ് ചെയ്യുന്നു
-      let targetRot = moveAngle + Math.PI;
-      let diff = targetRot - player.angle;
+      // 4. ക്യാരക്ടർ പോകുന്ന കൃത്യമായ ആംഗിളിലേക്ക് തിരിയുന്നു
+      const targetAngle = Math.atan2(moveX, moveZ);
+      let diff = targetAngle - player.angle;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      player.angle += diff * Math.min(1.0, dt * 14.0);
-
-      if (mixer && animAction) {
-        animAction.paused = false;
-        animAction.timeScale = animRate;
-        mixer.update(dt);
-      }
-
-      if (proceduralRig) {
-        walkCycle += dt * (isRunning ? 13 : 8);
-        proceduralRig.leftLegPivot.rotation.x = Math.sin(walkCycle) * 0.6;
-        proceduralRig.rightLegPivot.rotation.x = -Math.sin(walkCycle) * 0.6;
-        proceduralRig.leftArmPivot.rotation.x = -Math.sin(walkCycle) * 0.5;
-        proceduralRig.rightArmPivot.rotation.x = Math.sin(walkCycle) * 0.5;
-      }
-
-      if (performance.now() - lastStepTime > (isRunning ? 270 : 440)) {
-        playFootstep();
-        lastStepTime = performance.now();
-      }
-    } else {
-      if (animAction) {
-        animAction.paused = true;
-      }
-      if (proceduralRig) {
-        proceduralRig.leftLegPivot.rotation.x = 0;
-        proceduralRig.rightLegPivot.rotation.x = 0;
-        proceduralRig.leftArmPivot.rotation.x = 0;
-        proceduralRig.rightArmPivot.rotation.x = 0;
-      }
+      player.angle += diff * Math.min(1.0, dt * 18.0);
     }
 
+    // ഗ്രാവിറ്റി
     player.vy -= 22 * dt;
     player.y += player.vy * dt;
     if (player.y <= 0) { player.y = 0; player.vy = 0; }
@@ -724,7 +605,7 @@ function update(dt) {
     playerGroup.position.set(player.x, player.y, player.z);
     playerGroup.rotation.y = player.angle;
 
-    // ക്യാമറ ഫോളോ
+    // സ്മൂത്ത് ക്യാമറ ഫോളോ
     const d = 5.5;
     const targetCamX = player.x - Math.sin(yaw) * Math.cos(pitch) * d;
     const targetCamZ = player.z - Math.cos(yaw) * Math.cos(pitch) * d;
@@ -773,7 +654,7 @@ look.addEventListener('pointermove', e => {
 ['pointerup', 'pointercancel'].forEach(t => look.addEventListener(t, () => drag = false));
 
 runBtn.addEventListener('pointerdown', () => running = true);
-['pointerup', 'pointercancel', 'pointerleave'].forEach(t => runBtn.addEventListener(t, () => running = false));
+['pointerup', 'pointercancel', 'pointerleave'].forEach(e => runBtn.addEventListener(e, () => running = false));
 
 jumpBtn.addEventListener('pointerdown', () => {
   if (!currentVehicle && player.y <= 0.02) player.vy = 7.5;
