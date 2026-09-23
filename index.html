@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Open World HD</title>
+<title>Kochi 3D - Real Sports Car Edition</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -37,7 +37,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;fon
 #brake-btn{background:rgba(239,68,68,0.75)}
 #brake-btn:active{background:rgba(239,68,68,1)}
 </style>
+<!-- Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -74,11 +76,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;fon
 <script>
 'use strict';
 
-// 1. ENGINE AUDIO SYNTHESIZER
-let audioCtx = null;
-let oscBass = null, oscMid = null;
-let engineMaster = null;
-let lastStepTime = 0;
+// 1. ENGINE AUDIO
+let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
 function initAudio() {
   if (audioCtx) return;
@@ -92,47 +91,36 @@ function initAudio() {
   oscBass = audioCtx.createOscillator();
   oscBass.type = 'sawtooth';
   oscBass.frequency.setValueAtTime(32, audioCtx.currentTime);
-
-  const bassFilter = audioCtx.createBiquadFilter();
-  bassFilter.type = 'lowpass';
-  bassFilter.frequency.setValueAtTime(140, audioCtx.currentTime);
-  oscBass.connect(bassFilter);
-  bassFilter.connect(engineMaster);
+  oscBass.connect(engineMaster);
   oscBass.start();
 
   oscMid = audioCtx.createOscillator();
   oscMid.type = 'triangle';
   oscMid.frequency.setValueAtTime(64, audioCtx.currentTime);
-
-  const midFilter = audioCtx.createBiquadFilter();
-  midFilter.type = 'bandpass';
-  midFilter.frequency.setValueAtTime(260, audioCtx.currentTime);
-  midFilter.Q.setValueAtTime(2.0, audioCtx.currentTime);
-  oscMid.connect(midFilter);
-  midFilter.connect(engineMaster);
+  oscMid.connect(engineMaster);
   oscMid.start();
 }
 
 function playCarDoorFull() {
   if (!audioCtx) return;
   const t = audioCtx.currentTime;
-  const clickOsc = audioCtx.createOscillator();
-  const clickGain = audioCtx.createGain();
-  clickOsc.frequency.setValueAtTime(800, t);
-  clickOsc.frequency.exponentialRampToValueAtTime(100, t + 0.05);
-  clickGain.gain.setValueAtTime(0.3, t);
-  clickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
-  clickOsc.connect(clickGain);
-  clickGain.connect(audioCtx.destination);
-  clickOsc.start(t);
-  clickOsc.stop(t + 0.05);
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.setValueAtTime(750, t);
+  osc.frequency.exponentialRampToValueAtTime(100, t + 0.06);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.06);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + 0.06);
 }
 
 function playFootstep() {
   if (!audioCtx) return;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
   osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.05);
   gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
@@ -147,59 +135,56 @@ window.addEventListener('pointerdown', () => {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }, { once: false });
 
-// 2. HIGH DEFINITION CRISP RENDERER
+// 2. RENDERER SETUP
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); // Native Crisp HD
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.BasicShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x7fc0ec);
-scene.fog = new THREE.Fog(0x7fc0ec, 100, 520);
+scene.fog = new THREE.Fog(0x7fc0ec, 120, 500);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 600);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 550);
 
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.85);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.9);
 scene.add(hemiLight);
 
 const dirLight = new THREE.DirectionalLight(0xfffaed, 1.15);
-dirLight.position.set(120, 180, 90);
+dirLight.position.set(100, 180, 80);
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.width = 1024;
-dirLight.shadow.mapSize.height = 1024;
 scene.add(dirLight);
 
-// 3. WIDE RACING ROADS & METRO
+// 3. WIDE ROADS & SINGLE PILLAR METRO
 const BLOCK_SIZE = 100; 
 const ROAD_WIDTH = 22; 
 const HALF_ROAD = ROAD_WIDTH / 2;
-const SIDEWALK_W = 2.8; 
+const SIDEWALK_W = 3.0; 
 const GRID_MIN = -2; 
 const GRID_MAX = 2;  
 const colliders = [];
 
-// Ground Lawn
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(1000, 1000),
-  new THREE.MeshStandardMaterial({ color: 0x24582a, roughness: 0.9 })
+  new THREE.PlaneGeometry(900, 900),
+  new THREE.MeshLambertMaterial({ color: 0x24582a })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const roadMat = new THREE.MeshStandardMaterial({ color: 0x1a1d20, roughness: 0.8 });
-const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85 });
+const roadMat = new THREE.MeshLambertMaterial({ color: 0x1a1d20 });
+const sidewalkMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
 const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
 
 const roadCoords = [];
 for (let i = GRID_MIN; i <= GRID_MAX; i++) roadCoords.push(i * BLOCK_SIZE);
 
-const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 240;
+const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 220;
 const CENTER_OFFSET = ((GRID_MAX + GRID_MIN) * BLOCK_SIZE) / 2;
 
-// North-South Roads
 roadCoords.forEach(rx => {
   const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMat);
   rZ.rotation.x = -Math.PI / 2;
@@ -214,13 +199,12 @@ roadCoords.forEach(rx => {
     scene.add(sw);
   });
 
-  const yl = new THREE.Mesh(new THREE.PlaneGeometry(0.3, TOTAL_SPAN), yellowLineMat);
+  const yl = new THREE.Mesh(new THREE.PlaneGeometry(0.35, TOTAL_SPAN), yellowLineMat);
   yl.rotation.x = -Math.PI / 2;
   yl.position.set(rx, 0.03, CENTER_OFFSET);
   scene.add(yl);
 });
 
-// East-West Roads
 roadCoords.forEach(rz => {
   const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMat);
   rX.rotation.x = -Math.PI / 2;
@@ -235,17 +219,17 @@ roadCoords.forEach(rz => {
     scene.add(sw);
   });
 
-  const yl = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, 0.3), yellowLineMat);
+  const yl = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, 0.35), yellowLineMat);
   yl.rotation.x = -Math.PI / 2;
   yl.position.set(CENTER_OFFSET, 0.032, rz);
   scene.add(yl);
 });
 
-// SINGLE CENTER PILLAR METRO SYSTEM
-const pillarMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 });
-const trackDeckMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 });
+// Single Pillar Metro
+const pillarMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
+const trackDeckMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
 
-for (let pz = -380; pz <= 380; pz += 35) {
+for (let pz = -350; pz <= 350; pz += 35) {
   const centerPillar = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.15, 8.5, 12), pillarMat);
   centerPillar.position.set(0, 4.25, pz);
   centerPillar.castShadow = true;
@@ -253,62 +237,39 @@ for (let pz = -380; pz <= 380; pz += 35) {
 
   const pierCap = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.2, 2.2), pillarMat);
   pierCap.position.set(0, 8.5, pz);
-  pierCap.castShadow = true;
   scene.add(pierCap);
 
-  colliders.push({ minX: -1.2, maxX: 1.2, minZ: pz - 1.2, maxZ: pz + 1.2 });
+  colliders.push({ minX: -1.3, maxX: 1.3, minZ: pz - 1.3, maxZ: pz + 1.3 });
 }
 
 const trackDeck = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.7, TOTAL_SPAN), trackDeckMat);
 trackDeck.position.set(0, 9.1, CENTER_OFFSET);
-trackDeck.castShadow = true;
 scene.add(trackDeck);
 
-// Metro Train
 const metroTrain = new THREE.Group();
-const coachBodyMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.3 });
-const coachStripeMat = new THREE.MeshStandardMaterial({ color: 0x00a3c4, roughness: 0.4 });
-
 for (let c = -1; c <= 1; c++) {
-  const coach = new THREE.Group();
-  const cBody = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.5, 13), coachBodyMat);
-  cBody.position.y = 1.25;
-  coach.add(cBody);
-
-  const cStripe = new THREE.Mesh(new THREE.BoxGeometry(2.85, 0.45, 13.02), coachStripeMat);
-  cStripe.position.y = 1.15;
-  coach.add(cStripe);
-
-  coach.position.z = c * 14.0;
+  const coach = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.5, 13), new THREE.MeshLambertMaterial({ color: 0xf1f5f9 }));
+  coach.position.set(0, 1.25, c * 14.0);
   metroTrain.add(coach);
 }
 metroTrain.position.set(0, 9.7, 0);
 scene.add(metroTrain);
 let trainSpeed = 26.0;
 
-// Trees & Buildings
-const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3e27, roughness: 0.9 });
-const leafMat = new THREE.MeshStandardMaterial({ color: 0x1d6a2a, roughness: 0.7 });
-
 function addPalmTree(x, z) {
   const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 6.0, 8), trunkMat);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 6.0, 6), new THREE.MeshLambertMaterial({ color: 0x5a3e27 }));
   trunk.position.y = 3.0;
-  trunk.castShadow = true;
   tree.add(trunk);
 
-  const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.9, 8, 6), leafMat);
+  const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.9, 6, 5), new THREE.MeshLambertMaterial({ color: 0x1d6a2a }));
   leaves.scale.set(1.5, 0.35, 1.5);
   leaves.position.y = 5.8;
-  leaves.castShadow = true;
   tree.add(leaves);
 
   tree.position.set(x, 0, z);
   scene.add(tree);
 }
-
-const bldgMatA = new THREE.MeshStandardMaterial({ color: 0x0f2b48, metalness: 0.7, roughness: 0.3 });
-const bldgMatB = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.6 });
 
 for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   for (let bz = GRID_MIN; bz < GRID_MAX; bz++) {
@@ -317,7 +278,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
 
     const bw = 32, bd = 32;
     const bh = 20 + ((Math.abs(bx * 7 + bz * 13)) % 20);
-    const bMesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), (bx % 2 === 0) ? bldgMatA : bldgMatB);
+    const bMesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), new THREE.MeshLambertMaterial({ color: (bx % 2 === 0) ? 0x0f2b48 : 0xd97706 }));
     bMesh.position.set(lotCenterX, bh / 2, lotCenterZ);
     bMesh.castShadow = true;
     bMesh.receiveShadow = true;
@@ -326,121 +287,67 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
     addPalmTree(lotCenterX - 22, lotCenterZ - 22);
     addPalmTree(lotCenterX + 22, lotCenterZ + 22);
 
-    colliders.push({
-      minX: lotCenterX - bw / 2, maxX: lotCenterX + bw / 2,
-      minZ: lotCenterZ - bd / 2, maxZ: lotCenterZ + bd / 2
-    });
+    colliders.push({ minX: lotCenterX - bw / 2, maxX: lotCenterX + bw / 2, minZ: lotCenterZ - bd / 2, maxZ: lotCenterZ + bd / 2 });
   }
 }
 
-// 4. PLAYER CHARACTER RIG
-const playerGroup = new THREE.Group();
-scene.add(playerGroup);
-
-const skinMat = new THREE.MeshStandardMaterial({ color: 0x8a5531, roughness: 0.8 });
-const shirtMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7 });
-const jeansMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
-const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-
-// Pelvis anchor for proper seated alignment
-const pelvis = new THREE.Group();
-pelvis.position.y = 0.92;
-playerGroup.add(pelvis);
-
-const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 10), shirtMat);
-torsoMesh.position.y = 0.36;
-torsoMesh.castShadow = true;
-pelvis.add(torsoMesh);
-
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), skinMat);
-head.position.y = 0.96;
-head.castShadow = true;
-pelvis.add(head);
-
-// Left Arm
-const armL = new THREE.Group();
-armL.position.set(-0.42, 0.63, 0);
-const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
-armLMesh.position.y = -0.31;
-armLMesh.castShadow = true;
-armL.add(armLMesh);
-pelvis.add(armL);
-
-// Right Arm
-const armR = new THREE.Group();
-armR.position.set(0.42, 0.63, 0);
-const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
-armRMesh.position.y = -0.31;
-armRMesh.castShadow = true;
-armR.add(armRMesh);
-pelvis.add(armR);
-
-// Left Leg
-const legL = new THREE.Group();
-legL.position.set(-0.2, 0, 0);
-const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
-legLMesh.position.y = -0.39;
-legLMesh.castShadow = true;
-legL.add(legLMesh);
-const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
-shoeL.position.set(0, -0.78, 0.06);
-shoeL.castShadow = true;
-legL.add(shoeL);
-pelvis.add(legL);
-
-// Right Leg
-const legR = new THREE.Group();
-legR.position.set(0.2, 0, 0);
-const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
-legRMesh.position.y = -0.39;
-legRMesh.castShadow = true;
-legR.add(legRMesh);
-const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
-shoeR.position.set(0, -0.78, 0.06);
-shoeR.castShadow = true;
-legR.add(shoeR);
-pelvis.add(legR);
-
-// 5. SOLID MULTIPLE VEHICLES (SPORTS CAR, BIKE, BUS)
+// 4. REAL 3D SPORTS CAR (MAPPED WITH COLORMAP.PNG)
 const vehicles = [];
 
-// SPORTS CAR
 function createSportsCar(x, z) {
   const v = {
     type: 'car',
     group: new THREE.Group(),
     x: x, z: z,
-    speed: 0, maxSpeed: 40, accel: 28, friction: 7.5, angle: 0,
-    radius: 1.4,
-    box: { w: 2.2, d: 4.4 },
+    speed: 0, maxSpeed: 44, accel: 32, friction: 7.5, angle: 0,
+    radius: 1.45,
     wheels: [],
-    sound: { bass: 35, bassR: 90, mid: 65, midR: 190 }
+    sound: { bass: 36, bassR: 95, mid: 70, midR: 200 }
   };
 
-  const carPaint = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.85, roughness: 0.25 });
-  const carTrim = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7 });
+  // Safe procedural shape
+  const fallbackCar = new THREE.Group();
+  const fbChassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.45, 4.3), new THREE.MeshStandardMaterial({ color: 0xdc2626 }));
+  fbChassis.position.y = 0.45;
+  fallbackCar.add(fbChassis);
+  v.group.add(fallbackCar);
 
-  const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.48, 4.3), carPaint);
-  chassis.position.y = 0.46;
-  chassis.castShadow = true;
-  v.group.add(chassis);
+  // Texture Loader for colormap.png
+  const textureLoader = new THREE.TextureLoader();
+  const carTexture = textureLoader.load('colormap.png');
+  carTexture.flipY = false;
 
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.54, 2.2), carTrim);
-  cabin.position.set(0, 0.92, -0.25);
-  cabin.castShadow = true;
-  v.group.add(cabin);
+  const gltfLoader = new THREE.GLTFLoader();
+  gltfLoader.load(
+    'car.glb',
+    function (gltf) {
+      const model = gltf.scene;
 
-  const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.35, 16);
-  const tireMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 });
+      // Apply texture to all parts
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            child.material.map = carTexture;
+            child.material.needsUpdate = true;
+          }
+        }
+      });
 
-  [[-1.08, 0.38, 1.3], [1.08, 0.38, 1.3], [-1.08, 0.38, -1.3], [1.08, 0.38, -1.3]].forEach(pos => {
-    const w = new THREE.Mesh(wheelGeo, tireMat);
-    w.rotation.z = Math.PI / 2;
-    w.position.set(...pos);
-    w.castShadow = true;
-    v.group.add(w);
-    v.wheels.push(w);
-  });
+      // Fit to road scale & orientation
+      model.scale.set(1.4, 1.4, 1.4);
+      model.position.set(0, 0, 0);
+
+      v.group.remove(fallbackCar);
+      v.group.add(model);
+      console.log('Real 3D car.glb loaded with colormap.png!');
+    },
+    undefined,
+    function (err) {
+      console.error('Error loading car.glb:', err);
+    }
+  );
 
   v.group.position.set(v.x, 0, v.z);
   scene.add(v.group);
@@ -453,17 +360,13 @@ function createSportsBike(x, z) {
     type: 'bike',
     group: new THREE.Group(),
     x: x, z: z,
-    speed: 0, maxSpeed: 44, accel: 34, friction: 7.0, angle: 0,
+    speed: 0, maxSpeed: 46, accel: 36, friction: 7.0, angle: 0,
     radius: 1.0,
-    box: { w: 0.9, d: 2.2 },
     wheels: [],
     sound: { bass: 55, bassR: 160, mid: 120, midR: 320 }
   };
 
-  const bikePaint = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.25 });
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
-
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), bikePaint);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.25 }));
   frame.position.y = 0.65;
   frame.castShadow = true;
   v.group.add(frame);
@@ -472,58 +375,12 @@ function createSportsBike(x, z) {
   seat.position.set(0, 0.86, -0.22);
   v.group.add(seat);
 
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.12), frameMat);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.12), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
   handle.position.set(0, 1.08, 0.55);
   v.group.add(handle);
 
-  const bWheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.18, 16);
-  const bTireMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 });
-
   [[0, 0.36, 1.0], [0, 0.36, -0.9]].forEach(pos => {
-    const w = new THREE.Mesh(bWheelGeo, bTireMat);
-    w.rotation.z = Math.PI / 2;
-    w.position.set(...pos);
-    w.castShadow = true;
-    v.group.add(w);
-    v.wheels.push(w);
-  });
-
-  v.group.position.set(v.x, 0, v.z);
-  scene.add(v.group);
-  return v;
-}
-
-// CITY BUS
-function createCityBus(x, z) {
-  const v = {
-    type: 'bus',
-    group: new THREE.Group(),
-    x: x, z: z,
-    speed: 0, maxSpeed: 25, accel: 15, friction: 9.0, angle: 0,
-    radius: 2.2,
-    box: { w: 2.8, d: 8.6 },
-    wheels: [],
-    sound: { bass: 22, bassR: 45, mid: 40, midR: 85 }
-  };
-
-  const busPaint = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4 });
-  const busWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
-
-  const lower = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 8.4), busPaint);
-  lower.position.y = 1.0;
-  lower.castShadow = true;
-  v.group.add(lower);
-
-  const upper = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 8.4), busWhite);
-  upper.position.y = 2.2;
-  upper.castShadow = true;
-  v.group.add(upper);
-
-  const busWheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
-  const busTireMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
-
-  [[-1.25, 0.5, 2.6], [1.25, 0.5, 2.6], [-1.25, 0.5, -2.6], [1.25, 0.5, -2.6]].forEach(pos => {
-    const w = new THREE.Mesh(busWheelGeo, busTireMat);
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.18, 12), new THREE.MeshStandardMaterial({ color: 0x111827 }));
     w.rotation.z = Math.PI / 2;
     w.position.set(...pos);
     w.castShadow = true;
@@ -538,34 +395,72 @@ function createCityBus(x, z) {
 
 vehicles.push(createSportsCar(-BLOCK_SIZE + 5.0, 14));
 vehicles.push(createSportsBike(-BLOCK_SIZE - 5.0, 24));
-vehicles.push(createCityBus(-BLOCK_SIZE + 6.0, -28));
 
-// 6. SOLID COLLISION SYSTEM (STATIC OBJECTS + DYNAMIC VEHICLES)
 function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
-  // Static Environment Colliders (Metro pillars & Buildings)
   for (let i = 0; i < colliders.length; i++) {
     const c = colliders[i];
     if (px + radius > c.minX && px - radius < c.maxX && pz + radius > c.minZ && pz - radius < c.maxZ) {
       return true;
     }
   }
-
-  // Solid Vehicle-to-Vehicle and Player-to-Vehicle Collisions
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
     if (v === excludeVehicle) continue;
-
-    // Oriented Bounding Box collision approximation
-    const dist = Math.hypot(px - v.x, pz - v.z);
-    if (dist < (radius + v.radius)) {
-      return true; // Solid collision hit!
+    if (Math.hypot(px - v.x, pz - v.z) < (radius + v.radius)) {
+      return true;
     }
   }
-
   return false;
 }
 
-// 7. INPUT & VEHICLE MOUNTING
+// 5. CHARACTER RIG
+const playerGroup = new THREE.Group();
+scene.add(playerGroup);
+
+const skinMat = new THREE.MeshLambertMaterial({ color: 0x8a5531 });
+const shirtMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+const jeansMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+
+const pelvis = new THREE.Group();
+pelvis.position.y = 0.92;
+playerGroup.add(pelvis);
+
+const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 8), shirtMat);
+torsoMesh.position.y = 0.36;
+pelvis.add(torsoMesh);
+
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), skinMat);
+head.position.y = 0.96;
+pelvis.add(head);
+
+const armL = new THREE.Group();
+armL.position.set(-0.42, 0.63, 0);
+const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 6), skinMat);
+armLMesh.position.y = -0.31;
+armL.add(armLMesh);
+pelvis.add(armL);
+
+const armR = new THREE.Group();
+armR.position.set(0.42, 0.63, 0);
+const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 6), skinMat);
+armRMesh.position.y = -0.31;
+armR.add(armRMesh);
+pelvis.add(armR);
+
+const legL = new THREE.Group();
+legL.position.set(-0.2, 0, 0);
+const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 6), jeansMat);
+legLMesh.position.y = -0.39;
+legL.add(legLMesh);
+pelvis.add(legL);
+
+const legR = new THREE.Group();
+legR.position.set(0.2, 0, 0);
+const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 6), jeansMat);
+legRMesh.position.y = -0.39;
+legR.add(legRMesh);
+pelvis.add(legR);
+
 const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
 let currentVehicle = null;
 let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
@@ -607,23 +502,16 @@ function toggleVehicle() {
       yaw = currentVehicle.angle;
 
       if (currentVehicle.type === 'bike') {
-        // PROPER REALISTIC BIKE SEATING POSITION
         playerGroup.visible = true;
         scene.remove(playerGroup);
         currentVehicle.group.add(playerGroup);
 
-        // Position pelvis naturally on the bike seat
         playerGroup.position.set(0, 0.48, -0.22);
         playerGroup.rotation.set(0, 0, 0);
-
         pelvis.position.y = 0.52;
-        torsoMesh.rotation.x = 0.28; // Lean chest towards handles
-
-        // Hands firmly grabbing handlebars
+        torsoMesh.rotation.x = 0.28;
         armL.rotation.set(-0.75, 0.22, -0.15);
         armR.rotation.set(-0.75, -0.22, 0.15);
-
-        // Knees naturally bent onto footpegs
         legL.rotation.set(-1.15, 0.28, -0.1);
         legR.rotation.set(-1.15, -0.28, 0.1);
       } else {
@@ -631,12 +519,9 @@ function toggleVehicle() {
       }
     }
   } else {
-    // EXIT VEHICLE SAFELY
     if (currentVehicle.type === 'bike') {
       currentVehicle.group.remove(playerGroup);
       scene.add(playerGroup);
-
-      // Restore standing posture
       pelvis.position.y = 0.92;
       torsoMesh.rotation.x = 0;
       armL.rotation.set(0, 0, 0);
@@ -670,11 +555,10 @@ accelBtn.addEventListener('pointerdown', () => pedalGas = true);
 brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(e => brakeBtn.addEventListener(e, () => pedalBrake = false));
 
-// 8. SIMULATION LOOP
+// 6. MAIN SIMULATION LOOP
 function update(dt) {
   animTime += dt;
 
-  // Metro Train Loop
   metroTrain.position.z += trainSpeed * dt;
   if (metroTrain.position.z > 350) { metroTrain.position.z = 350; trainSpeed = -26.0; }
   else if (metroTrain.position.z < -350) { metroTrain.position.z = -350; trainSpeed = 26.0; }
@@ -688,7 +572,6 @@ function update(dt) {
 
   if (k.f) { toggleVehicle(); k.f = false; }
 
-  // Check Nearby Vehicle
   if (!currentVehicle) {
     let canEnter = false;
     vehicles.forEach(v => {
@@ -717,7 +600,6 @@ function update(dt) {
       if (cv.speed < 0) cv.speed = Math.min(0, cv.speed + cv.friction * dt);
     }
 
-    // Engine Audio
     if (oscBass && oscMid && engineMaster) {
       const speedRatio = Math.abs(cv.speed) / cv.maxSpeed;
       oscBass.frequency.setValueAtTime(cv.sound.bass + speedRatio * cv.sound.bassR + (throttle > 0 ? 25 : 0), audioCtx.currentTime);
@@ -725,13 +607,11 @@ function update(dt) {
       engineMaster.gain.setValueAtTime(0.24 + speedRatio * 0.16 + (throttle !== 0 ? 0.08 : 0), audioCtx.currentTime);
     }
 
-    // Steering
     if (Math.abs(cv.speed) > 0.1) {
       const dir = cv.speed > 0 ? 1 : -1;
-      const turnRate = cv.type === 'bike' ? 2.6 : (cv.type === 'bus' ? 1.4 : 2.0);
+      const turnRate = cv.type === 'bike' ? 2.6 : 2.0;
       cv.angle -= steer * turnRate * dir * dt;
 
-      // Realistic Bike Banking (Lean into turns)
       if (cv.type === 'bike') {
         cv.group.rotation.z = -steer * 0.38 * Math.min(1, Math.abs(cv.speed) / 12);
       }
@@ -745,33 +625,21 @@ function update(dt) {
       if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
 
-    // Wheel Roll
     const roll = (cv.speed * dt) / 0.38;
     cv.wheels.forEach(w => w.rotation.x += roll);
 
     const vx = Math.sin(cv.angle) * cv.speed * dt;
     const vz = Math.cos(cv.angle) * cv.speed * dt;
 
-    // Solid Non-Ghost Collision check on both axes
-    if (!checkCollision(cv.x + vx, cv.z, cv.radius, cv)) {
-      cv.x += vx;
-    } else {
-      cv.speed = 0; // Solid stop
-    }
-
-    if (!checkCollision(cv.x, cv.z + vz, cv.radius, cv)) {
-      cv.z += vz;
-    } else {
-      cv.speed = 0;
-    }
+    if (!checkCollision(cv.x + vx, cv.z, cv.radius, cv)) cv.x += vx; else cv.speed = 0;
+    if (!checkCollision(cv.x, cv.z + vz, cv.radius, cv)) cv.z += vz; else cv.speed = 0;
 
     cv.group.position.set(cv.x, 0, cv.z);
     cv.group.rotation.y = cv.angle;
 
-    // Camera follow
     let targetCamX, targetCamY, targetCamZ;
-    const baseDist = cv.type === 'bus' ? 14.5 : (cv.type === 'bike' ? 6.5 : 8.5);
-    const baseHeight = cv.type === 'bus' ? 3.8 : (cv.type === 'bike' ? 1.8 : 2.0);
+    const baseDist = cv.type === 'bike' ? 6.5 : 8.5;
+    const baseHeight = cv.type === 'bike' ? 1.8 : 2.0;
 
     if (camMode === 0) {
       const d = baseDist + (Math.abs(cv.speed) / cv.maxSpeed) * 1.8;
@@ -794,7 +662,6 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // ON FOOT WALKING WITH SOLID HITBOX
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
@@ -805,7 +672,6 @@ function update(dt) {
       const dx = (-iz * Math.sin(yaw) - ix * Math.cos(yaw)) * speed * dt;
       const dz = (-iz * Math.cos(yaw) + ix * Math.sin(yaw)) * speed * dt;
 
-      // Solid Player Collision with Vehicles and Buildings
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
@@ -850,7 +716,7 @@ function update(dt) {
   }
 }
 
-// 9. EVENT LISTENERS
+// 7. INPUT LISTENERS
 window.keys = {};
 addEventListener('keydown', e => window.keys[e.key.toLowerCase()] = true);
 addEventListener('keyup', e => window.keys[e.key.toLowerCase()] = false);
