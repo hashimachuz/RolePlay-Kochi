@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Kawasaki Ninja H2R Edition</title>
+<title>Kochi 3D - CJ Edition</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -292,7 +292,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
-// 4. VEHICLES (CAR & BIKE WITH CORRECTED GROUND ELEVATION)
+// 4. VEHICLES (CAR ONLY)
 const vehicles = [];
 
 function createSportsCar(x, z) {
@@ -333,82 +333,7 @@ function createSportsCar(x, z) {
   return v;
 }
 
-// FIXED BIKE HEIGHT & ELEVATION FIX
-function createSportsBike(x, z) {
-  const v = {
-    type: 'bike',
-    group: new THREE.Group(),
-    x: x, z: z,
-    speed: 0, maxSpeed: 48, accel: 38, friction: 7.0, angle: 0,
-    radius: 1.2,
-    wheelsFront: [],
-    wheelsBack: [],
-    sound: { bass: 55, bassR: 160, mid: 120, midR: 320 }
-  };
-
-  const bikeContainer = new THREE.Group();
-  v.group.add(bikeContainer);
-
-  const gltfLoader = new THREE.GLTFLoader();
-  gltfLoader.setPath('./');
-
-  function tryLoadBike(fileName, fallback) {
-    gltfLoader.load(fileName, function (gltf) {
-      const model = gltf.scene;
-      
-      model.updateMatrixWorld(true);
-      const bbox = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      bbox.getSize(size);
-
-      const maxDim = Math.max(size.x, size.y, size.z);
-      if (maxDim > 0) {
-        const targetScale = 2.2 / maxDim;
-        model.scale.set(targetScale, targetScale, targetScale);
-      }
-
-      model.updateMatrixWorld(true);
-      const updatedBox = new THREE.Box3().setFromObject(model);
-      
-      // FIXED: Ensure wheels sit strictly on ground (Y=0) without sinking
-      model.position.y = -updatedBox.min.y;
-
-      const center = new THREE.Vector3();
-      updatedBox.getCenter(center);
-      model.position.x -= center.x;
-      model.position.z -= center.z;
-
-      model.traverse(node => {
-        if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = true;
-          const name = node.name.toLowerCase();
-          if (name.includes('wheel') || name.includes('tire')) {
-            if (node.position.z > 0) v.wheelsFront.push(node);
-            else v.wheelsBack.push(node);
-          }
-        }
-      });
-
-      bikeContainer.add(model);
-    }, undefined, fallback);
-  }
-
-  tryLoadBike('bike.glb', function() {
-    tryLoadBike('sports_bike.glb', function() {
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), new THREE.MeshStandardMaterial({ color: 0x16a34a }));
-      frame.position.y = 0.65;
-      bikeContainer.add(frame);
-    });
-  });
-
-  v.group.position.set(v.x, 0, v.z);
-  scene.add(v.group);
-  return v;
-}
-
 vehicles.push(createSportsCar(-BLOCK_SIZE + 4.5, 14));
-vehicles.push(createSportsBike(-BLOCK_SIZE - 4.5, 14));
 
 function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   for (let i = 0; i < colliders.length; i++) {
@@ -427,77 +352,39 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. CHARACTER RIG
+// 5. REAL 3D CHARACTER (CJ MODEL INTEGRATION)
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
-
-const skinMat = new THREE.MeshStandardMaterial({ color: 0x8a5531, roughness: 0.8 });
-const shirtMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7 });
-const jeansMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
-const shoeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
-
-const pelvis = new THREE.Group();
-pelvis.position.y = 0.92;
-playerGroup.add(pelvis);
-
-const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 10), shirtMat);
-torsoMesh.position.y = 0.36;
-torsoMesh.castShadow = true;
-pelvis.add(torsoMesh);
-
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), skinMat);
-head.position.y = 0.96;
-head.castShadow = true;
-pelvis.add(head);
-
-const armL = new THREE.Group();
-armL.position.set(-0.42, 0.63, 0);
-const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
-armLMesh.position.y = -0.31;
-armLMesh.castShadow = true;
-armL.add(armLMesh);
-pelvis.add(armL);
-
-const armR = new THREE.Group();
-armR.position.set(0.42, 0.63, 0);
-const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
-armRMesh.position.y = -0.31;
-armRMesh.castShadow = true;
-armR.add(armRMesh);
-pelvis.add(armR);
-
-const legL = new THREE.Group();
-legL.position.set(-0.2, 0, 0);
-const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
-legLMesh.position.y = -0.39;
-legLMesh.castShadow = true;
-legL.add(legLMesh);
-
-const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.34), shoeMat);
-shoeL.position.set(0, -0.84, 0.06);
-shoeL.castShadow = true;
-legL.add(shoeL);
-pelvis.add(legL);
-
-const legR = new THREE.Group();
-legR.position.set(0.2, 0, 0);
-const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
-legRMesh.position.y = -0.39;
-legRMesh.castShadow = true;
-legR.add(legRMesh);
-
-const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.34), shoeMat);
-shoeR.position.set(0, -0.84, 0.06);
-shoeR.castShadow = true;
-legR.add(shoeR);
-pelvis.add(legR);
 
 const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
 let currentVehicle = null;
 let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
-let pedalGas = false, pedalBrake = false;
 let lastTime = performance.now(), animTime = 0;
 const lookTarget = new THREE.Vector3(0, 1.4, 0);
+
+let cjModel = null;
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.setPath('./');
+
+// Load CJ.glb as the main protagonist
+gltfLoader.load('CJ.glb', function (gltf) {
+  cjModel = gltf.scene;
+  cjModel.scale.set(1.2, 1.2, 1.2);
+  cjModel.position.set(0, 0, 0);
+  cjModel.traverse(node => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+  playerGroup.add(cjModel);
+  console.log("CJ Protagonist loaded successfully!");
+}, undefined, function(err) {
+  console.warn("CJ.glb not found, using fallback box character.");
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.4), new THREE.MeshStandardMaterial({ color: 0x2563eb }));
+  box.position.y = 0.85;
+  playerGroup.add(box);
+});
 
 let camMode = 0;
 camera.position.set(player.x, 3.2, player.z - 6.5);
@@ -531,43 +418,9 @@ function toggleVehicle() {
       footButtons.style.display = 'none';
       vehiclePedals.style.display = 'flex';
       yaw = currentVehicle.angle;
-
-      if (currentVehicle.type === 'bike') {
-        playerGroup.visible = true;
-        scene.remove(playerGroup);
-        currentVehicle.group.add(playerGroup);
-
-        // PERFECT SITTING ALIGNMENT ON H2R SADDLE
-        playerGroup.position.set(0, 0.65, -0.12);
-        playerGroup.rotation.set(0, 0, 0);
-        pelvis.position.y = 0.42;
-
-        torsoMesh.rotation.x = 0.58;
-        head.rotation.x = -0.32;
-
-        armL.rotation.set(-1.0, 0.35, -0.38);
-        armR.rotation.set(-1.0, -0.35, 0.38);
-
-        legL.rotation.set(-1.25, 0.28, -0.12);
-        legR.rotation.set(-1.25, -0.28, 0.12);
-      } else {
-        playerGroup.visible = false;
-      }
+      playerGroup.visible = false; // Hide CJ inside car
     }
   } else {
-    if (currentVehicle.type === 'bike') {
-      currentVehicle.group.remove(playerGroup);
-      scene.add(playerGroup);
-
-      pelvis.position.y = 0.92;
-      torsoMesh.rotation.x = 0;
-      head.rotation.x = 0;
-      armL.rotation.set(0, 0, 0);
-      armR.rotation.set(0, 0, 0);
-      legL.rotation.set(0, 0, 0);
-      legR.rotation.set(0, 0, 0);
-    }
-
     player.x = currentVehicle.x - Math.cos(currentVehicle.angle) * (currentVehicle.radius + 1.2);
     player.z = currentVehicle.z + Math.sin(currentVehicle.angle) * (currentVehicle.radius + 1.2);
     player.y = 0;
@@ -578,8 +431,6 @@ function toggleVehicle() {
     enterBtn.textContent = 'ENTER';
     footButtons.style.display = 'flex';
     vehiclePedals.style.display = 'none';
-    pedalGas = false;
-    pedalBrake = false;
 
     if (engineMaster) engineMaster.gain.setValueAtTime(0, audioCtx.currentTime);
   }
@@ -647,20 +498,13 @@ function update(dt) {
 
     if (Math.abs(cv.speed) > 0.1) {
       const dir = cv.speed > 0 ? 1 : -1;
-      const turnRate = cv.type === 'bike' ? 2.6 : 2.0;
-      cv.angle -= steer * turnRate * dir * dt;
-
-      if (cv.type === 'bike') {
-        cv.group.rotation.z = -steer * 0.42 * Math.min(1, Math.abs(cv.speed) / 14);
-      }
+      cv.angle -= steer * 2.0 * dir * dt;
 
       if (!drag && camMode !== 2) {
         let angleDiff = cv.angle - yaw;
         angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
         yaw += angleDiff * Math.min(1, dt * 3.0);
       }
-    } else {
-      if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
 
     const rollSpeed = (cv.speed * dt) / 0.38;
@@ -685,20 +529,9 @@ function update(dt) {
     cv.group.position.set(cv.x, 0, cv.z);
     cv.group.rotation.y = cv.angle;
 
-    let targetCamX, targetCamY, targetCamZ;
-    const baseDist = cv.type === 'bike' ? 6.5 : 8.5;
-    const baseHeight = cv.type === 'bike' ? 1.8 : 2.0;
-
-    if (camMode === 0) {
-      const d = baseDist + (Math.abs(cv.speed) / cv.maxSpeed) * 1.8;
-      targetCamX = cv.x - Math.sin(yaw) * Math.cos(pitch) * d;
-      targetCamZ = cv.z - Math.cos(yaw) * Math.cos(pitch) * d;
-      targetCamY = Math.max(0.8, baseHeight + Math.sin(pitch) * d);
-    } else {
-      targetCamX = cv.x - Math.sin(yaw) * Math.cos(pitch) * (baseDist + 5);
-      targetCamZ = cv.z - Math.cos(yaw) * Math.cos(pitch) * (baseDist + 5);
-      targetCamY = Math.max(1.2, baseHeight + 2.0 + Math.sin(pitch) * d);
-    }
+    let targetCamX = cv.x - Math.sin(yaw) * Math.cos(pitch) * 8.5;
+    let targetCamZ = cv.z - Math.cos(yaw) * Math.cos(pitch) * 8.5;
+    let targetCamY = Math.max(0.8, 2.0 + Math.sin(pitch) * 8.5);
 
     camera.position.x += (targetCamX - camera.position.x) * 0.15;
     camera.position.y += (targetCamY - camera.position.y) * 0.15;
@@ -710,7 +543,7 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING
+    // WALKING CJ
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
@@ -726,20 +559,16 @@ function update(dt) {
 
       player.angle = Math.atan2(dx, dz);
 
-      const swingSpeed = isRunning ? 16 : 9;
-      const swing = Math.sin(animTime * swingSpeed) * (isRunning ? 0.8 : 0.45);
-      legL.rotation.x = swing;
-      legR.rotation.x = -swing;
-      armL.rotation.x = -swing * 0.9;
-      armR.rotation.x = swing * 0.9;
+      if (cjModel) {
+        cjModel.position.y = Math.abs(Math.sin(animTime * 12)) * 0.08; // Bobbing walk
+      }
 
       if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
         playFootstep();
         lastStepTime = animTime;
       }
     } else {
-      legL.rotation.x = 0; legR.rotation.x = 0;
-      armL.rotation.x = 0; armR.rotation.x = 0;
+      if (cjModel) cjModel.position.y = 0;
     }
 
     player.vy -= 22 * dt;
@@ -765,7 +594,6 @@ function update(dt) {
   }
 }
 
-// 7. INPUT LISTENERS
 window.keys = {};
 addEventListener('keydown', e => window.keys[e.key.toLowerCase()] = true);
 addEventListener('keyup', e => window.keys[e.key.toLowerCase()] = false);
