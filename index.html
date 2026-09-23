@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Fixed Movement & Animation</title>
+<title>Kochi 3D - Fixed Movement & Animation Edition</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -414,7 +414,6 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel = gltf.scene;
   cjModel.scale.set(1.15, 1.15, 1.15);
   
-  // അടിസ്ഥാന ഓറിയന്റേഷൻ നേരിട്ട് പൂജ്യത്തിൽ നിർത്തി ഗ്രൂപ്പ് വഴിയാണ് തിരിക്കുന്നത്
   cjModel.rotation.set(0, 0, 0);
   cjModel.updateMatrixWorld(true);
 
@@ -427,7 +426,7 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel.position.x -= center.x;
   cjModel.position.z -= center.z;
 
-  // സ്കെലിറ്റൻ ബോണുകൾ കണ്ടെത്തുക (Procedural limb swing backup)
+  // സ്കെലിറ്റൻ ബോണുകൾ കണ്ടെത്തുന്നു (നടക്കുമ്പോൾ കൈകാലുകൾ അനങ്ങാൻ)
   cjModel.traverse(node => {
     if (node.isMesh) {
       node.castShadow = true;
@@ -444,12 +443,9 @@ gltfLoader.load('character.glb', function (gltf) {
 
   playerGroup.add(cjModel);
 
-  // മോഡലിൽ ആനിമേഷൻ ക്ലിപ്പ് ഉണ്ടെങ്കിൽ പ്ലേ ചെയ്യുന്നു
   if (gltf.animations && gltf.animations.length > 0) {
     mixer = new THREE.AnimationMixer(cjModel);
     animAction = mixer.clipAction(gltf.animations[0]);
-    animAction.setEffectiveTimeScale(1.0);
-    animAction.play();
   }
 }, undefined, function() {
   const charBody = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
@@ -616,7 +612,7 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING & RUNNING (FIXED DIRECTION & ANIMATION)
+    // WALKING / RUNNING & PROCEDURAL LIMB SWING
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
@@ -624,34 +620,28 @@ function update(dt) {
     const speed = isRunning ? 9.5 : 4.5;
 
     if (isMoving) {
-      // ക്യാമറ വ്യൂ അടിസ്ഥാനമാക്കിയുള്ള യഥാർത്ഥ മൂവ്മെന്റ്
       const dx = (-iz * Math.sin(yaw) - ix * Math.cos(yaw)) * speed * dt;
       const dz = (-iz * Math.cos(yaw) + ix * Math.sin(yaw)) * speed * dt;
 
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      // പുറകിലോട്ട് പോകുന്നത് ഒഴിവാക്കാൻ ദിശ കൃത്യമായി തിരിക്കുന്നു (Math.PI ഓഫ്‌സെറ്റ്)
+      // ക്യാരക്ടർ കൃത്യമായ ദിശയിലേക്ക് തിരിക്കാൻ (മാത്രമല്ല ഫ്രണ്ട്-ബാക്ക് എറർ ഒഴിവാക്കാൻ Math.PI കൂട്ടിയിരിക്കുന്നു)
       player.angle = Math.atan2(dx, dz) + Math.PI;
 
-      // ഫയലിലെ ആനിമേഷൻ ഉണ്ടെങ്കിൽ അത് സ്പീഡിൽ പ്ലേ ചെയ്യുക
-      if (mixer && animAction) {
-        mixer.update(dt * (isRunning ? 2.0 : 1.2));
-      } else {
-        // ഇൻ-ബിൽറ്റ് ബോൺ ആനിമേഷൻ ബാക്കപ്പ് (കൈകാലുകൾ അനങ്ങാൻ)
-        const swingSpeed = isRunning ? 16 : 10;
-        const armSwing = Math.sin(animTime * swingSpeed) * 0.55;
-        const legSwing = Math.sin(animTime * swingSpeed) * 0.65;
+      // നടക്കുമ്പോൾ കൈകാലുകൾ സ്വാഭാവികമായി വീശാൻ (Procedural Swing)
+      const swingSpeed = isRunning ? 18 : 12;
+      const armSwing = Math.sin(animTime * swingSpeed) * 0.7;
+      const legSwing = Math.sin(animTime * swingSpeed) * 0.8;
 
-        if (leftArmBone) leftArmBone.rotation.x = armSwing;
-        if (rightArmBone) rightArmBone.rotation.x = -armSwing;
-        if (leftLegBone) leftLegBone.rotation.x = -legSwing;
-        if (rightLegBone) rightLegBone.rotation.x = legSwing;
+      if (leftArmBone) leftArmBone.rotation.x = armSwing;
+      if (rightArmBone) rightArmBone.rotation.x = -armSwing;
+      if (leftLegBone) leftLegBone.rotation.x = -legSwing;
+      if (rightLegBone) rightLegBone.rotation.x = legSwing;
 
-        if (cjModel) {
-          cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * swingSpeed)) * 0.09;
-          cjModel.rotation.z = Math.sin(animTime * swingSpeed) * 0.03;
-        }
+      if (cjModel) {
+        cjModel.position.y = cjBaseY + Math.abs(Math.sin(animTime * swingSpeed)) * 0.09;
+        cjModel.rotation.z = Math.sin(animTime * swingSpeed * 0.5) * 0.04;
       }
 
       if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
@@ -659,18 +649,20 @@ function update(dt) {
         lastStepTime = animTime;
       }
     } else {
-      // നിൽക്കുമ്പോൾ ആനിമേഷൻ സ്വാഭാവികമായി നിർത്തുക / റിലാക്സ് ചെയ്യുക
+      // നിൽക്കുമ്പോൾ ഐഡിൽ ആനിമേഷൻ പ്ലേ ചെയ്യുക
       if (mixer && animAction) {
-        mixer.update(dt * 0.6); // ഇളം അനക്കത്തോടെ ഐഡിൽ
-      } else {
-        if (leftArmBone) leftArmBone.rotation.x = 0;
-        if (rightArmBone) rightArmBone.rotation.x = 0;
-        if (leftLegBone) leftLegBone.rotation.x = 0;
-        if (rightLegBone) rightLegBone.rotation.x = 0;
-        if (cjModel) {
-          cjModel.position.y = cjBaseY;
-          cjModel.rotation.z = 0;
-        }
+        if (!animAction.isRunning()) animAction.play();
+        mixer.update(dt);
+      }
+
+      // ബോണുകൾ സ്റ്റാൻഡേർഡ് പൊസിഷനിലേക്ക് കൊണ്ടുവരുക
+      if (leftArmBone) leftArmBone.rotation.set(0, 0, 0);
+      if (rightArmBone) rightArmBone.rotation.set(0, 0, 0);
+      if (leftLegBone) leftLegBone.rotation.set(0, 0, 0);
+      if (rightLegBone) rightLegBone.rotation.set(0, 0, 0);
+      if (cjModel) {
+        cjModel.position.y = cjBaseY;
+        cjModel.rotation.z = 0;
       }
     }
 
