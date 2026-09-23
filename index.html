@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Kochi 3D - Perfect Direction & Animation</title>
+<title>Kochi 3D - Working Animation Fix</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -401,7 +401,7 @@ scene.add(playerGroup);
 const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
 let currentVehicle = null;
 let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
-let lastTime = performance.now(), animTime = 0;
+let lastTime = performance.now();
 const lookTarget = new THREE.Vector3(0, 1.4, 0);
 
 let cjModel = null;
@@ -411,7 +411,6 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel = gltf.scene;
   cjModel.scale.set(1.15, 1.15, 1.15);
   
-  // ക്യാരക്ടറുടെ ഡിഫോൾട്ട് ഫെയ്സിങ് ശരിയാക്കാൻ റൊട്ടേഷൻ ഒഴിവാക്കി ഒറിജിനലിൽ വെക്കുന്നു
   cjModel.rotation.set(0, 0, 0);
   cjModel.updateMatrixWorld(true);
 
@@ -506,8 +505,10 @@ brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 
 // 6. SIMULATION LOOP
 function update(dt) {
-  animTime += dt;
-  if (mixer) mixer.update(dt);
+  // ആനിമേഷൻ മിക്സർ എല്ലാ ഫ്രെയ്മിലും അപ്ഡേറ്റ് ചെയ്യുന്നു
+  if (mixer) {
+    mixer.update(dt);
+  }
 
   metroTrain.position.z += trainSpeed * dt;
   if (metroTrain.position.z > 350) { metroTrain.position.z = 350; trainSpeed = -26.0; }
@@ -604,26 +605,36 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING / RUNNING & CORRECT FORWARD FACING
+    // WALKING / RUNNING & NATIVE ANIMATION SPEED SCALING
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     const isMoving = len > 0.05;
     const isRunning = running || k.shift;
     const speed = isRunning ? 9.5 : 4.5;
 
+    // നടുമ്പോൾ ആനിമേഷൻ സ്പീഡ് ഓട്ടോമാറ്റിക്കായി അഡ്ജസ്റ്റ് ചെയ്യുന്നു
+    if (animAction) {
+      if (isMoving) {
+        animAction.timeScale = isRunning ? 1.8 : 1.0;
+        if (!animAction.isRunning()) animAction.play();
+      } else {
+        animAction.timeScale = 0.5;
+      }
+    }
+
     if (isMoving) {
-      const dx = (-iz * Math.sin(yaw) - ix * Math.cos(yaw)) * speed * dt;
-      const dz = (-iz * Math.cos(yaw) + ix * Math.sin(yaw)) * speed * dt;
+      const moveAngle = Math.atan2(-ix, -iz) + yaw;
+      const dx = Math.sin(moveAngle) * speed * dt;
+      const dz = Math.cos(moveAngle) * speed * dt;
 
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
-      // ക്യാരക്ടർ മുൻപിലേക്ക് കൃത്യമായി ഫേസ് ചെയ്ത് നീങ്ങാൻ (Math.PI ഒഴിവാക്കി ഒറിജിനൽ ആംഗിൾ)
-      player.angle = Math.atan2(dx, dz);
+      player.angle = moveAngle;
 
-      if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
+      if (performance.now() - lastStepTime > (isRunning ? 280 : 440)) {
         playFootstep();
-        lastStepTime = animTime;
+        lastStepTime = performance.now();
       }
     }
 
@@ -639,13 +650,13 @@ function update(dt) {
     const targetCamZ = player.z - Math.cos(yaw) * Math.cos(pitch) * d;
     const targetCamY = Math.max(0.6, player.y + 1.6 + Math.sin(pitch) * d);
 
-    camera.position.x += (targetCamX - camera.position.x) * 0.15;
-    camera.position.y += (targetCamY - camera.position.y) * 0.15;
-    camera.position.z += (targetCamZ - camera.position.z) * 0.15;
+    camera.position.x += (targetCamX - camera.position.x) * 0.2;
+    camera.position.y += (targetCamY - camera.position.y) * 0.2;
+    camera.position.z += (targetCamZ - camera.position.z) * 0.2;
 
-    lookTarget.x += (player.x - lookTarget.x) * 0.15;
-    lookTarget.y += ((player.y + 1.35) - lookTarget.y) * 0.15;
-    lookTarget.z += (player.z - lookTarget.z) * 0.15;
+    lookTarget.x += (player.x - lookTarget.x) * 0.2;
+    lookTarget.y += ((player.y + 1.35) - lookTarget.y) * 0.2;
+    lookTarget.z += (player.z - lookTarget.z) * 0.2;
     camera.lookAt(lookTarget);
   }
 }
