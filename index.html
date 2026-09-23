@@ -552,4 +552,668 @@ const jeansMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.
 const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
 
 const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.72, 12), shirtMat);
-tor
+torsoMesh.position.y = 1.28;
+torsoMesh.castShadow = true;
+playerGroup.add(torsoMesh);
+
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.15, 8), skinMat);
+neck.position.y = 1.68;
+playerGroup.add(neck);
+
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), skinMat);
+head.position.y = 1.88;
+head.castShadow = true;
+playerGroup.add(head);
+
+const armL = new THREE.Group();
+armL.position.set(-0.42, 1.55, 0);
+const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
+armLMesh.position.y = -0.31;
+armLMesh.castShadow = true;
+armL.add(armLMesh);
+playerGroup.add(armL);
+
+const armR = new THREE.Group();
+armR.position.set(0.42, 1.55, 0);
+const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
+armRMesh.position.y = -0.31;
+armRMesh.castShadow = true;
+armR.add(armRMesh);
+playerGroup.add(armR);
+
+const legL = new THREE.Group();
+legL.position.set(-0.2, 0.92, 0);
+const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
+legLMesh.position.y = -0.39;
+legLMesh.castShadow = true;
+legL.add(legLMesh);
+
+const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
+shoeL.position.set(0, -0.78, 0.06);
+shoeL.castShadow = true;
+legL.add(shoeL);
+playerGroup.add(legL);
+
+const legR = new THREE.Group();
+legR.position.set(0.2, 0.92, 0);
+const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
+legRMesh.position.y = -0.39;
+legRMesh.castShadow = true;
+legR.add(legRMesh);
+
+const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
+shoeR.position.set(0, -0.78, 0.06);
+shoeR.castShadow = true;
+legR.add(shoeR);
+playerGroup.add(legR);
+
+// Detailed Sports Car Model
+const car = {
+  group: new THREE.Group(),
+  x: -BLOCK_SIZE + 3.8,
+  z: 14,
+  speed: 0,
+  maxSpeed: 32,
+  accel: 25,
+  friction: 7,
+  angle: 0,
+  wheels: []
+};
+scene.add(car.group);
+
+const carPaint = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.2 }); // Deep Metallic Blue
+const carTrim = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+const carGlass = new THREE.MeshStandardMaterial({ color: 0x0a1120, metalness: 0.95, roughness: 0.1 });
+const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.95, roughness: 0.15 });
+const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const brakeLightMat = new THREE.MeshStandardMaterial({ color: 0x440000, emissive: 0x220000, roughness: 0.3 });
+
+// Chassis
+const mainChassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.44, 4.3), carPaint);
+mainChassis.position.y = 0.45;
+mainChassis.castShadow = true;
+car.group.add(mainChassis);
+
+// Hood
+const hood = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.16, 1.4), carPaint);
+hood.position.set(0, 0.68, 1.15);
+hood.rotation.x = 0.08;
+hood.castShadow = true;
+car.group.add(hood);
+
+// Front Splitter
+const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(2.08, 0.22, 0.6), carTrim);
+frontBumper.position.set(0, 0.26, 2.18);
+frontBumper.castShadow = true;
+car.group.add(frontBumper);
+
+// LED Headlights
+[-0.78, 0.78].forEach(hx => {
+  const hl = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.08), headlightMat);
+  hl.position.set(hx, 0.52, 2.18);
+  car.group.add(hl);
+});
+
+// Cabin Glass
+const cabinMesh = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.52, 2.1), carGlass);
+cabinMesh.position.set(0, 0.92, -0.22);
+cabinMesh.castShadow = true;
+car.group.add(cabinMesh);
+
+// Roof
+const roofTop = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.06, 1.5), carTrim);
+roofTop.position.set(0, 1.2, -0.22);
+car.group.add(roofTop);
+
+// Rear Lights
+[-0.72, 0.72].forEach(lx => {
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.08), brakeLightMat);
+  tail.position.set(lx, 0.54, -2.16);
+  car.group.add(tail);
+});
+
+// Dual Exhausts
+[-0.45, 0.45].forEach(pipeX => {
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.28, 12), chromeMat);
+  exhaust.rotation.x = Math.PI / 2;
+  exhaust.position.set(pipeX, 0.32, -2.18);
+  car.group.add(exhaust);
+});
+
+// Spoiler
+[-0.65, 0.65].forEach(sx => {
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 0.16), carTrim);
+  stand.position.set(sx, 0.85, -1.98);
+  car.group.add(stand);
+});
+const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.07, 0.42), carTrim);
+spoilerWing.position.set(0, 1.02, -2.02);
+spoilerWing.castShadow = true;
+car.group.add(spoilerWing);
+
+// Mirrors
+[-0.92, 0.92].forEach(sideX => {
+  const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.22), carTrim);
+  mirror.position.set(sideX, 0.82, 0.4);
+  car.group.add(mirror);
+});
+
+// Wheels
+const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.35, 18);
+const tireMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 });
+const rimMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, metalness: 0.9, roughness: 0.2 });
+
+const wheelPositions = [
+  [-1.08, 0.38, 1.3],
+  [1.08, 0.38, 1.3],
+  [-1.08, 0.38, -1.3],
+  [1.08, 0.38, -1.3]
+];
+
+wheelPositions.forEach((pos) => {
+  const wGroup = new THREE.Group();
+  const tire = new THREE.Mesh(wheelGeo, tireMat);
+  tire.rotation.z = Math.PI / 2;
+  tire.castShadow = true;
+  wGroup.add(tire);
+
+  const rimDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.36, 10), rimMat);
+  rimDisc.rotation.z = Math.PI / 2;
+  wGroup.add(rimDisc);
+
+  wGroup.position.set(...pos);
+  car.group.add(wGroup);
+  car.wheels.push(wGroup);
+});
+
+car.group.position.set(car.x, 0, car.z);
+
+// Player Spawns near Beach
+const player = { x: -BLOCK_SIZE, y: 0, z: 8, vy: 0, angle: 0, radius: 0.5 };
+let inCar = false;
+let yaw = 0, pitch = 0.25, joyX = 0, joyY = 0, running = false, drag = false, lx = 0, ly = 0;
+let pedalGas = false, pedalBrake = false;
+let lastTime = performance.now(), animTime = 0;
+const lookTarget = new THREE.Vector3(0, 1.4, 0);
+
+let camMode = 0;
+camera.position.set(player.x, 3.2, player.z - 6.5);
+camera.lookAt(player.x, 1.4, player.z);
+
+function checkCollision(px, pz) {
+  const r = inCar ? 1.3 : player.radius;
+  for (let i = 0; i < colliders.length; i++) {
+    const c = colliders[i];
+    if (
+      px + r > c.minX &&
+      px - r < c.maxX &&
+      pz + r > c.minZ &&
+      pz - r < c.maxZ
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const enterBtn = document.getElementById('enter-btn');
+const runBtn = document.getElementById('run');
+const jumpBtn = document.getElementById('jump');
+const footButtons = document.getElementById('foot-buttons');
+const vehiclePedals = document.getElementById('vehicle-pedals');
+const accelBtn = document.getElementById('accel-btn');
+const brakeBtn = document.getElementById('brake-btn');
+const camIndicator = document.getElementById('cam-indicator');
+
+function cycleCameraMode() {
+  camMode = (camMode + 1) % 3;
+  const labels = ['CAM: NORMAL', 'CAM: FAR', 'CAM: FIRST PERSON'];
+  camIndicator.textContent = labels[camMode];
+}
+
+document.getElementById('cam').addEventListener('pointerdown', cycleCameraMode);
+
+function toggleVehicle() {
+  initAudio();
+  playCarDoorFull();
+
+  if (!inCar) {
+    const dist = Math.hypot(player.x - car.x, player.z - car.z);
+    if (dist < 3.8) {
+      inCar = true;
+      playerGroup.visible = false;
+      enterBtn.textContent = 'EXIT';
+      footButtons.style.display = 'none';
+      vehiclePedals.style.display = 'flex';
+      yaw = car.angle;
+      prevLeftWheel = null;
+      prevRightWheel = null;
+    }
+  } else {
+    inCar = false;
+    player.x = car.x - Math.cos(car.angle) * 2.2;
+    player.z = car.z + Math.sin(car.angle) * 2.2;
+    player.y = 0;
+    playerGroup.position.set(player.x, player.y, player.z);
+    playerGroup.visible = true;
+    enterBtn.textContent = 'ENTER';
+    footButtons.style.display = 'flex';
+    vehiclePedals.style.display = 'none';
+    pedalGas = false;
+    pedalBrake = false;
+    prevLeftWheel = null;
+    prevRightWheel = null;
+
+    brakeLightMat.color.setHex(0x440000);
+    brakeLightMat.emissive.setHex(0x220000);
+
+    if (engineMaster) engineMaster.gain.setValueAtTime(0, audioCtx.currentTime);
+    if (brakeGain) brakeGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  }
+}
+
+enterBtn.addEventListener('click', toggleVehicle);
+
+accelBtn.addEventListener('pointerdown', () => pedalGas = true);
+['pointerup', 'pointercancel', 'pointerleave'].forEach(e => accelBtn.addEventListener(e, () => pedalGas = false));
+
+brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
+['pointerup', 'pointercancel', 'pointerleave'].forEach(e => brakeBtn.addEventListener(e, () => pedalBrake = false));
+
+const miniCanvas = document.getElementById('minimap');
+const mCtx = miniCanvas.getContext('2d');
+const MAP_ZOOM = 0.38; 
+
+function renderRotatingMinimap() {
+  const activeX = inCar ? car.x : player.x;
+  const activeZ = inCar ? car.z : player.z;
+  const activeAngle = inCar ? car.angle : player.angle;
+
+  mCtx.clearRect(0, 0, 120, 120);
+  mCtx.fillStyle = '#225227';
+  mCtx.fillRect(0, 0, 120, 120);
+
+  mCtx.save();
+  mCtx.translate(60, 60);
+  mCtx.rotate(activeAngle);
+
+  mCtx.fillStyle = '#0c4a6e';
+  mCtx.fillRect((-220 - activeX) * MAP_ZOOM - (140 * MAP_ZOOM), -(-450 - activeZ) * MAP_ZOOM, 280 * MAP_ZOOM, -900 * MAP_ZOOM);
+
+  mCtx.fillStyle = '#c89d66';
+  mCtx.fillRect((-66 - activeX) * MAP_ZOOM - (14 * MAP_ZOOM), -(-450 - activeZ) * MAP_ZOOM, 28 * MAP_ZOOM, -900 * MAP_ZOOM);
+
+  mCtx.fillStyle = '#1a1e23';
+  roadCoords.forEach(rx => {
+    mCtx.fillRect((rx - activeX) * MAP_ZOOM - (ROAD_WIDTH * MAP_ZOOM) / 2, -(-400 - activeZ) * MAP_ZOOM, ROAD_WIDTH * MAP_ZOOM, -TOTAL_SPAN * MAP_ZOOM);
+  });
+  roadCoords.forEach(rz => {
+    mCtx.fillRect((-300 - activeX) * MAP_ZOOM, -(rz - activeZ) * MAP_ZOOM - (ROAD_WIDTH * MAP_ZOOM) / 2, TOTAL_SPAN * MAP_ZOOM, ROAD_WIDTH * MAP_ZOOM);
+  });
+
+  mCtx.fillStyle = '#2563eb';
+  mCtx.fillRect((0 - activeX) * MAP_ZOOM - 1.5, -(-400 - activeZ) * MAP_ZOOM, 3, -TOTAL_SPAN * MAP_ZOOM);
+
+  mCtx.fillStyle = '#06b6d4';
+  mCtx.fillRect((metroTrain.position.x - activeX) * MAP_ZOOM - 2.5, -(metroTrain.position.z - activeZ) * MAP_ZOOM - 12, 5, 24);
+
+  mCtx.fillStyle = '#475569';
+  colliders.forEach(c => {
+    if (c.w > 40) return;
+    const bx = (c.px - activeX) * MAP_ZOOM;
+    const bz = -(c.pz - activeZ) * MAP_ZOOM;
+    mCtx.fillRect(bx - (c.w * MAP_ZOOM) / 2, bz - (c.d * MAP_ZOOM) / 2, c.w * MAP_ZOOM, c.d * MAP_ZOOM);
+  });
+
+  if (!inCar) {
+    const cx = (car.x - activeX) * MAP_ZOOM;
+    const cz = -(car.z - activeZ) * MAP_ZOOM;
+    mCtx.fillStyle = '#38bdf8';
+    mCtx.beginPath();
+    mCtx.arc(cx, cz, 4.5, 0, Math.PI * 2);
+    mCtx.fill();
+    mCtx.strokeStyle = '#ffffff';
+    mCtx.lineWidth = 1.5;
+    mCtx.stroke();
+  }
+
+  mCtx.restore();
+
+  mCtx.save();
+  mCtx.translate(60, 60);
+  mCtx.fillStyle = inCar ? '#ef4444' : '#facc15';
+  mCtx.strokeStyle = '#000000';
+  mCtx.lineWidth = 2;
+
+  mCtx.beginPath();
+  mCtx.moveTo(0, -11);
+  mCtx.lineTo(7, 7);
+  mCtx.lineTo(0, 3);
+  mCtx.lineTo(-7, 7);
+  mCtx.closePath();
+  mCtx.fill();
+  mCtx.stroke();
+
+  mCtx.restore();
+}
+
+function update(dt) {
+  animTime += dt;
+  updateSkidMarks(dt);
+
+  ocean.position.y = 0.2 + Math.sin(animTime * 2.5) * 0.08;
+
+  metroTrain.position.z += trainSpeed * dt;
+  if (metroTrain.position.z > 240) {
+    metroTrain.position.z = 240;
+    trainSpeed = -22.0;
+  } else if (metroTrain.position.z < -240) {
+    metroTrain.position.z = -240;
+    trainSpeed = 22.0;
+  }
+
+  let ix = joyX, iz = joyY;
+  const k = window.keys || {};
+  if (k.w || k.arrowup) iz = -1;
+  if (k.s || k.arrowdown) iz = 1;
+  if (k.a || k.arrowleft) ix = -1;
+  if (k.d || k.arrowright) ix = 1;
+
+  if (k.f) {
+    toggleVehicle();
+    k.f = false;
+  }
+  if (k.v) {
+    cycleCameraMode();
+    k.v = false;
+  }
+
+  const distToCar = Math.hypot(player.x - car.x, player.z - car.z);
+  enterBtn.style.display = (!inCar && distToCar < 3.8) || inCar ? 'block' : 'none';
+
+  if (inCar) {
+    let throttle = 0;
+    if (pedalGas || k.w || k.arrowup) throttle += 1;
+    if (pedalBrake || k.s || k.arrowdown) throttle -= 1;
+
+    const steer = ix;
+
+    if (throttle < 0) {
+      brakeLightMat.color.setHex(0xff1111);
+      brakeLightMat.emissive.setHex(0xff0000);
+    } else {
+      brakeLightMat.color.setHex(0x440000);
+      brakeLightMat.emissive.setHex(0x220000);
+    }
+
+    if (throttle > 0) {
+      car.speed += car.accel * dt;
+      car.speed = Math.min(car.maxSpeed, car.speed);
+    } else if (throttle < 0) {
+      if (car.speed > 0.5) {
+        car.speed = Math.max(0, car.speed - car.accel * 1.6 * dt);
+      } else {
+        car.speed -= car.accel * 0.6 * dt;
+        car.speed = Math.max(-car.maxSpeed * 0.45, car.speed);
+      }
+    } else {
+      if (car.speed > 0) car.speed = Math.max(0, car.speed - car.friction * dt);
+      if (car.speed < 0) car.speed = Math.min(0, car.speed + car.friction * dt);
+    }
+
+    if (oscBass && oscMid && engineMaster) {
+      const speedRatio = Math.abs(car.speed) / car.maxSpeed;
+      const targetBass = 30 + speedRatio * 85 + (throttle > 0 ? 25 : 0);
+      const targetMid = 60 + speedRatio * 180 + (throttle > 0 ? 45 : 0);
+
+      oscBass.frequency.setValueAtTime(targetBass, audioCtx.currentTime);
+      oscMid.frequency.setValueAtTime(targetMid, audioCtx.currentTime);
+      engineMaster.gain.setValueAtTime(0.24 + speedRatio * 0.16 + (throttle !== 0 ? 0.08 : 0), audioCtx.currentTime);
+    }
+
+    const isHardBraking = (throttle < 0) && (car.speed > 10);
+
+    if (brakeGain) {
+      if (isHardBraking) {
+        brakeGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      } else {
+        brakeGain.gain.setValueAtTime(0, audioCtx.currentTime);
+      }
+    }
+
+    const cosA = Math.cos(car.angle), sinA = Math.sin(car.angle);
+    const curLeft = {
+      x: car.x - 0.95 * cosA - 1.3 * sinA,
+      z: car.z + 0.95 * sinA - 1.3 * cosA
+    };
+    const curRight = {
+      x: car.x + 0.95 * cosA - 1.3 * sinA,
+      z: car.z - 0.95 * sinA - 1.3 * cosA
+    };
+
+    if (isHardBraking) {
+      if (prevLeftWheel && prevRightWheel) {
+        addSkidRibbon(prevLeftWheel, curLeft);
+        addSkidRibbon(prevRightWheel, curRight);
+      }
+      prevLeftWheel = curLeft;
+      prevRightWheel = curRight;
+    } else {
+      prevLeftWheel = null;
+      prevRightWheel = null;
+    }
+
+    if (Math.abs(car.speed) > 0.1) {
+      const dir = car.speed > 0 ? 1 : -1;
+      car.angle -= steer * 1.9 * dir * dt;
+
+      if (!drag && camMode !== 2) {
+        let angleDiff = car.angle - yaw;
+        angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+        yaw += angleDiff * Math.min(1, dt * 2.8);
+      }
+    }
+
+    car.wheels[0].rotation.y = -steer * 0.45;
+    car.wheels[1].rotation.y = -steer * 0.45;
+
+    const roll = (car.speed * dt) / 0.38;
+    car.wheels.forEach(w => w.children[0].rotation.x += roll);
+
+    const vx = Math.sin(car.angle) * car.speed * dt;
+    const vz = Math.cos(car.angle) * car.speed * dt;
+
+    if (!checkCollision(car.x + vx, car.z)) car.x += vx; else car.speed = 0;
+    if (!checkCollision(car.x, car.z + vz)) car.z += vz; else car.speed = 0;
+
+    car.group.position.set(car.x, 0, car.z);
+    car.group.rotation.y = car.angle;
+
+    let targetCamX, targetCamY, targetCamZ;
+    let targetLookX = car.x, targetLookY = 1.4, targetLookZ = car.z;
+
+    if (camMode === 0) {
+      const d = 8.5 + (Math.abs(car.speed) / car.maxSpeed) * 1.8;
+      targetCamX = car.x - Math.sin(yaw) * Math.cos(pitch) * d;
+      targetCamZ = car.z - Math.cos(yaw) * Math.cos(pitch) * d;
+      targetCamY = Math.max(0.8, 1.8 + Math.sin(pitch) * d);
+    } else if (camMode === 1) {
+      const d = 13.5;
+      targetCamX = car.x - Math.sin(yaw) * Math.cos(pitch) * d;
+      targetCamZ = car.z - Math.cos(yaw) * Math.cos(pitch) * d;
+      targetCamY = Math.max(1.2, 3.2 + Math.sin(pitch) * d);
+    } else {
+      yaw = car.angle;
+      targetCamX = car.x + Math.sin(car.angle) * 0.7;
+      targetCamZ = car.z + Math.cos(car.angle) * 0.7;
+      targetCamY = 1.15;
+      targetLookX = car.x + Math.sin(car.angle) * 20;
+      targetLookY = 1.15;
+      targetLookZ = car.z + Math.cos(car.angle) * 20;
+    }
+
+    const lerpFactor = 1 - Math.exp(-14 * dt);
+    camera.position.x += (targetCamX - camera.position.x) * lerpFactor;
+    camera.position.y += (targetCamY - camera.position.y) * lerpFactor;
+    camera.position.z += (targetCamZ - camera.position.z) * lerpFactor;
+
+    lookTarget.x += (targetLookX - lookTarget.x) * lerpFactor;
+    lookTarget.y += (targetLookY - lookTarget.y) * lerpFactor;
+    lookTarget.z += (targetLookZ - lookTarget.z) * lerpFactor;
+    camera.lookAt(lookTarget);
+
+  } else {
+    prevLeftWheel = null;
+    prevRightWheel = null;
+
+    const len = Math.hypot(ix, iz);
+    if (len > 1) { ix /= len; iz /= len; }
+    const isMoving = len > 0.05;
+    const isRunning = running || k.shift;
+    const speed = isRunning ? 9.5 : 4.5;
+
+    if (isMoving) {
+      const f = -iz;
+      const s = ix;
+
+      const dx = (f * Math.sin(yaw) - s * Math.cos(yaw)) * speed * dt;
+      const dz = (f * Math.cos(yaw) + s * Math.sin(yaw)) * speed * dt;
+
+      const nextX = player.x + dx;
+      if (!checkCollision(nextX, player.z)) player.x = nextX;
+
+      const nextZ = player.z + dz;
+      if (!checkCollision(player.x, nextZ)) player.z = nextZ;
+
+      player.angle = Math.atan2(dx, dz);
+
+      const swingSpeed = isRunning ? 16 : 9;
+      const swingAngle = isRunning ? 0.8 : 0.45;
+      const swing = Math.sin(animTime * swingSpeed) * swingAngle;
+
+      legL.rotation.x = swing;
+      legR.rotation.x = -swing;
+      armL.rotation.x = -swing * 0.9;
+      armR.rotation.x = swing * 0.9;
+
+      torsoMesh.position.y = 1.28 + Math.abs(Math.sin(animTime * swingSpeed)) * 0.06;
+      head.position.y = 1.88 + Math.abs(Math.sin(animTime * swingSpeed)) * 0.06;
+
+      const stepInterval = isRunning ? 0.28 : 0.44;
+      if (animTime - lastStepTime > stepInterval) {
+        playFootstep();
+        lastStepTime = animTime;
+      }
+    } else {
+      legL.rotation.x = 0;
+      legR.rotation.x = 0;
+      armL.rotation.x = 0;
+      armR.rotation.x = 0;
+      torsoMesh.position.y = 1.28 + Math.sin(animTime * 2.5) * 0.015;
+      head.position.y = 1.88 + Math.sin(animTime * 2.5) * 0.015;
+    }
+
+    player.vy -= 22 * dt;
+    player.y += player.vy * dt;
+    if (player.y <= 0) { player.y = 0; player.vy = 0; }
+
+    playerGroup.position.set(player.x, player.y, player.z);
+    playerGroup.rotation.y = player.angle;
+
+    let targetCamX, targetCamY, targetCamZ;
+    let targetLookX = player.x, targetLookY = player.y + 1.35, targetLookZ = player.z;
+
+    if (camMode === 0) {
+      const d = 6.0;
+      targetCamX = player.x - Math.sin(yaw) * Math.cos(pitch) * d;
+      targetCamZ = player.z - Math.cos(yaw) * Math.cos(pitch) * d;
+      targetCamY = Math.max(0.6, player.y + 1.6 + Math.sin(pitch) * d);
+    } else if (camMode === 1) {
+      const d = 10.5;
+      targetCamX = player.x - Math.sin(yaw) * Math.cos(pitch) * d;
+      targetCamZ = player.z - Math.cos(yaw) * Math.cos(pitch) * d;
+      targetCamY = Math.max(1.0, player.y + 3.0 + Math.sin(pitch) * d);
+    } else {
+      yaw = player.angle;
+      targetCamX = player.x + Math.sin(player.angle) * 0.2;
+      targetCamZ = player.z + Math.cos(player.angle) * 0.2;
+      targetCamY = player.y + 1.88;
+      targetLookX = player.x + Math.sin(player.angle) * 15;
+      targetLookY = player.y + 1.88;
+      targetLookZ = player.z + Math.cos(player.angle) * 15;
+    }
+
+    const lerpFactor = 1 - Math.exp(-14 * dt);
+    camera.position.x += (targetCamX - camera.position.x) * lerpFactor;
+    camera.position.y += (targetCamY - camera.position.y) * lerpFactor;
+    camera.position.z += (targetCamZ - camera.position.z) * lerpFactor;
+
+    lookTarget.x += (targetLookX - lookTarget.x) * lerpFactor;
+    lookTarget.y += ((player.y + 1.35) - lookTarget.y) * lerpFactor;
+    lookTarget.z += (player.z - lookTarget.z) * lerpFactor;
+    camera.lookAt(lookTarget);
+  }
+
+  renderRotatingMinimap();
+}
+
+window.keys = {};
+addEventListener('keydown', e => window.keys[e.key.toLowerCase()] = true);
+addEventListener('keyup', e => window.keys[e.key.toLowerCase()] = false);
+
+const joy = document.getElementById('joy'), stick = document.getElementById('stick');
+let joyActive = false;
+function joySet(e) {
+  const r = joy.getBoundingClientRect();
+  let x = e.clientX - r.left - r.width / 2, y = e.clientY - r.top - r.height / 2;
+  const max = 50, l = Math.hypot(x, y);
+  if (l > max) { x = x * max / l; y = y * max / l; }
+  joyX = x / max; joyY = y / max;
+  stick.style.transform = `translate(${x}px, ${y}px)`;
+}
+joy.addEventListener('pointerdown', e => { joyActive = true; joy.setPointerCapture(e.pointerId); joySet(e); });
+joy.addEventListener('pointermove', e => { if (joyActive) joySet(e); });
+['pointerup', 'pointercancel'].forEach(t => joy.addEventListener(t, () => {
+  joyActive = false; joyX = 0; joyY = 0; stick.style.transform = 'translate(0, 0)';
+}));
+
+const look = document.getElementById('look');
+look.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; look.setPointerCapture(e.pointerId); });
+look.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - lx, dy = e.clientY - ly;
+  lx = e.clientX; ly = e.clientY;
+  yaw -= dx * 0.0055;
+  pitch = Math.max(-0.15, Math.min(1.15, pitch + dy * 0.005));
+});
+['pointerup', 'pointercancel'].forEach(t => look.addEventListener(t, () => drag = false));
+
+runBtn.addEventListener('pointerdown', () => running = true);
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => runBtn.addEventListener(t, () => running = false));
+
+jumpBtn.addEventListener('pointerdown', () => {
+  if (!inCar && player.y <= 0.02) player.vy = 7.5;
+});
+
+function resize() {
+  const w = window.innerWidth || document.documentElement.clientWidth || 360;
+  const h = window.innerHeight || document.documentElement.clientHeight || 640;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function loop(now) {
+  const dt = Math.min(0.04, (now - lastTime) / 1000);
+  lastTime = now;
+  update(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
