@@ -75,7 +75,6 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
 <script>
 'use strict';
 
-// 1. ENGINE AUDIO SYNTHESIZER
 let audioCtx = null, oscBass = null, oscMid = null, engineMaster = null, lastStepTime = 0;
 
 function initAudio() {
@@ -134,7 +133,6 @@ window.addEventListener('pointerdown', () => {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }, { once: false });
 
-// 2. RENDERER & HIGH CONTRAST LIGHTING
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -159,7 +157,6 @@ dirLight.shadow.mapSize.width = 1024;
 dirLight.shadow.mapSize.height = 1024;
 scene.add(dirLight);
 
-// 3. ROAD ENVIRONMENT
 const BLOCK_SIZE = 100; 
 const ROAD_WIDTH = 22; 
 const HALF_ROAD = ROAD_WIDTH / 2;
@@ -227,7 +224,6 @@ roadCoords.forEach(rz => {
   });
 });
 
-// Metro
 const pillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 });
 const trackDeckMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
 
@@ -296,10 +292,9 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
-// 4. VEHICLES INTEGRATION
+// 4. VEHICLES (CAR & BIKE WITH CORRECTED GROUND ELEVATION)
 const vehicles = [];
 
-// SPORTS CAR
 function createSportsCar(x, z) {
   const v = {
     type: 'car',
@@ -317,12 +312,10 @@ function createSportsCar(x, z) {
 
   gltfLoader.load('car.glb', function (gltf) {
     const model = gltf.scene;
-
     model.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-
         const name = child.name.toLowerCase();
         if (name.includes('wheel')) {
           if (name.includes('front')) v.wheelsFront.push(child);
@@ -330,7 +323,6 @@ function createSportsCar(x, z) {
         }
       }
     });
-
     model.scale.set(1.5, 1.5, 1.5);
     model.position.set(0, 0, 0);
     v.group.add(model);
@@ -341,7 +333,7 @@ function createSportsCar(x, z) {
   return v;
 }
 
-// REAL SPORTS BIKE (KAWASAKI H2R) WITH PROPER SEAT ANCHOR & WHEEL NODES
+// FIXED BIKE HEIGHT & ELEVATION FIX
 function createSportsBike(x, z) {
   const v = {
     type: 'bike',
@@ -360,50 +352,54 @@ function createSportsBike(x, z) {
   const gltfLoader = new THREE.GLTFLoader();
   gltfLoader.setPath('./');
 
-  gltfLoader.load('bike.glb', function (gltf) {
-    const model = gltf.scene;
-    
-    // Normalize scale for accurate human proportionality
-    model.updateMatrixWorld(true);
-    const bbox = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    bbox.getSize(size);
+  function tryLoadBike(fileName, fallback) {
+    gltfLoader.load(fileName, function (gltf) {
+      const model = gltf.scene;
+      
+      model.updateMatrixWorld(true);
+      const bbox = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      bbox.getSize(size);
 
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 0) {
-      const targetScale = 2.4 / maxDim;
-      model.scale.set(targetScale, targetScale, targetScale);
-    }
-
-    model.updateMatrixWorld(true);
-    const updatedBox = new THREE.Box3().setFromObject(model);
-    model.position.y = -updatedBox.min.y;
-
-    const center = new THREE.Vector3();
-    updatedBox.getCenter(center);
-    model.position.x -= center.x;
-    model.position.z -= center.z;
-
-    model.traverse(node => {
-      if (node.isMesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
-        const name = node.name.toLowerCase();
-        if (name.includes('wheel') || name.includes('tire') || name.includes('object_')) {
-          // Automatic wheel detection for rolling animation
-          if (node.position.z > 0) v.wheelsFront.push(node);
-          else v.wheelsBack.push(node);
-        }
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 0) {
+        const targetScale = 2.2 / maxDim;
+        model.scale.set(targetScale, targetScale, targetScale);
       }
-    });
 
-    bikeContainer.add(model);
-    console.log("Kawasaki Ninja H2R loaded successfully!");
-  }, undefined, function() {
-    // Fallback
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 2.0), new THREE.MeshStandardMaterial({ color: 0x16a34a }));
-    frame.position.y = 0.7;
-    bikeContainer.add(frame);
+      model.updateMatrixWorld(true);
+      const updatedBox = new THREE.Box3().setFromObject(model);
+      
+      // FIXED: Ensure wheels sit strictly on ground (Y=0) without sinking
+      model.position.y = -updatedBox.min.y;
+
+      const center = new THREE.Vector3();
+      updatedBox.getCenter(center);
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+
+      model.traverse(node => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+          const name = node.name.toLowerCase();
+          if (name.includes('wheel') || name.includes('tire')) {
+            if (node.position.z > 0) v.wheelsFront.push(node);
+            else v.wheelsBack.push(node);
+          }
+        }
+      });
+
+      bikeContainer.add(model);
+    }, undefined, fallback);
+  }
+
+  tryLoadBike('bike.glb', function() {
+    tryLoadBike('sports_bike.glb', function() {
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 1.9), new THREE.MeshStandardMaterial({ color: 0x16a34a }));
+      frame.position.y = 0.65;
+      bikeContainer.add(frame);
+    });
   });
 
   v.group.position.set(v.x, 0, v.z);
@@ -454,7 +450,6 @@ head.position.y = 0.96;
 head.castShadow = true;
 pelvis.add(head);
 
-// Left Arm
 const armL = new THREE.Group();
 armL.position.set(-0.42, 0.63, 0);
 const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
@@ -463,7 +458,6 @@ armLMesh.castShadow = true;
 armL.add(armLMesh);
 pelvis.add(armL);
 
-// Right Arm
 const armR = new THREE.Group();
 armR.position.set(0.42, 0.63, 0);
 const armRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.62, 8), skinMat);
@@ -472,7 +466,6 @@ armRMesh.castShadow = true;
 armR.add(armRMesh);
 pelvis.add(armR);
 
-// Left Leg & Shoes
 const legL = new THREE.Group();
 legL.position.set(-0.2, 0, 0);
 const legLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
@@ -486,7 +479,6 @@ shoeL.castShadow = true;
 legL.add(shoeL);
 pelvis.add(legL);
 
-// Right Leg & Shoes
 const legR = new THREE.Group();
 legR.position.set(0.2, 0, 0);
 const legRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.78, 8), jeansMat);
@@ -545,19 +537,19 @@ function toggleVehicle() {
         scene.remove(playerGroup);
         currentVehicle.group.add(playerGroup);
 
-        // PERFECT H2R RIDER ERGONOMICS (LOWERED SADDLE FIT)
-        playerGroup.position.set(0, 0.42, -0.18);
+        // PERFECT SITTING ALIGNMENT ON H2R SADDLE
+        playerGroup.position.set(0, 0.65, -0.12);
         playerGroup.rotation.set(0, 0, 0);
-        pelvis.position.y = 0.44;
+        pelvis.position.y = 0.42;
 
-        torsoMesh.rotation.x = 0.65; // Deep tuck over tank
-        head.rotation.x = -0.38;     // Helmet up looking forward
+        torsoMesh.rotation.x = 0.58;
+        head.rotation.x = -0.32;
 
-        armL.rotation.set(-1.05, 0.38, -0.42);
-        armR.rotation.set(-1.05, -0.38, 0.42);
+        armL.rotation.set(-1.0, 0.35, -0.38);
+        armR.rotation.set(-1.0, -0.35, 0.38);
 
-        legL.rotation.set(-1.35, 0.32, -0.15);
-        legR.rotation.set(-1.35, -0.32, 0.15);
+        legL.rotation.set(-1.25, 0.28, -0.12);
+        legR.rotation.set(-1.25, -0.28, 0.12);
       } else {
         playerGroup.visible = false;
       }
@@ -671,7 +663,6 @@ function update(dt) {
       if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
 
-    // Wheel Roll & Steering Animation Fix
     const rollSpeed = (cv.speed * dt) / 0.38;
     if (cv.wheelsFront) {
       cv.wheelsFront.forEach(w => {
