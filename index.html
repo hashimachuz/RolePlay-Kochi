@@ -150,10 +150,10 @@ scene.fog = new THREE.Fog(0x7fc0ec, 120, 500);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 550);
 
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.9);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.95);
 scene.add(hemiLight);
 
-const dirLight = new THREE.DirectionalLight(0xfffaed, 1.15);
+const dirLight = new THREE.DirectionalLight(0xfffaed, 1.25);
 dirLight.position.set(100, 180, 80);
 dirLight.castShadow = true;
 scene.add(dirLight);
@@ -260,11 +260,13 @@ function addPalmTree(x, z) {
   const tree = new THREE.Group();
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 6.0, 6), new THREE.MeshLambertMaterial({ color: 0x5a3e27 }));
   trunk.position.y = 3.0;
+  trunk.castShadow = true;
   tree.add(trunk);
 
   const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.9, 6, 5), new THREE.MeshLambertMaterial({ color: 0x1d6a2a }));
   leaves.scale.set(1.5, 0.35, 1.5);
   leaves.position.y = 5.8;
+  leaves.castShadow = true;
   tree.add(leaves);
 
   tree.position.set(x, 0, z);
@@ -291,7 +293,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
-// 4. REAL 3D SPORTS CAR (MAPPED WITH COLORMAP.PNG)
+// 4. REAL 3D SPORTS CAR
 const vehicles = [];
 
 function createSportsCar(x, z) {
@@ -305,25 +307,21 @@ function createSportsCar(x, z) {
     sound: { bass: 36, bassR: 95, mid: 70, midR: 200 }
   };
 
-  // Safe procedural shape
-  const fallbackCar = new THREE.Group();
-  const fbChassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.45, 4.3), new THREE.MeshStandardMaterial({ color: 0xdc2626 }));
-  fbChassis.position.y = 0.45;
-  fallbackCar.add(fbChassis);
-  v.group.add(fallbackCar);
-
-  // Texture Loader for colormap.png
+  // Safe Texture Loader
   const textureLoader = new THREE.TextureLoader();
   const carTexture = textureLoader.load('colormap.png');
   carTexture.flipY = false;
 
   const gltfLoader = new THREE.GLTFLoader();
+  
+  // Try loading from current path or raw github fallback
+  const carFile = 'car.glb';
+
   gltfLoader.load(
-    'car.glb',
+    carFile,
     function (gltf) {
       const model = gltf.scene;
 
-      // Apply texture to all parts
       model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -335,17 +333,22 @@ function createSportsCar(x, z) {
         }
       });
 
-      // Fit to road scale & orientation
-      model.scale.set(1.4, 1.4, 1.4);
+      // Perfect Scale & Placement
+      model.scale.set(1.5, 1.5, 1.5);
       model.position.set(0, 0, 0);
 
-      v.group.remove(fallbackCar);
       v.group.add(model);
-      console.log('Real 3D car.glb loaded with colormap.png!');
+      console.log('Real 3D car.glb successfully mounted!');
     },
     undefined,
     function (err) {
-      console.error('Error loading car.glb:', err);
+      console.error('Error loading car.glb directly, trying fallback URL...', err);
+      // Fallback directly to raw GitHub file
+      gltfLoader.load('https://raw.githubusercontent.com/hashimachuz/RolePlay-Kochi/main/car.glb', function(gltfFallback) {
+        const model = gltfFallback.scene;
+        model.scale.set(1.5, 1.5, 1.5);
+        v.group.add(model);
+      });
     }
   );
 
@@ -555,7 +558,7 @@ accelBtn.addEventListener('pointerdown', () => pedalGas = true);
 brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(e => brakeBtn.addEventListener(e, () => pedalBrake = false));
 
-// 6. MAIN SIMULATION LOOP
+// 6. SIMULATION LOOP
 function update(dt) {
   animTime += dt;
 
@@ -624,9 +627,6 @@ function update(dt) {
     } else {
       if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
-
-    const roll = (cv.speed * dt) / 0.38;
-    cv.wheels.forEach(w => w.rotation.x += roll);
 
     const vx = Math.sin(cv.angle) * cv.speed * dt;
     const vz = Math.cos(cv.angle) * cv.speed * dt;
