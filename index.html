@@ -352,7 +352,7 @@ function checkCollision(px, pz, radius = 0.5, excludeVehicle = null) {
   return false;
 }
 
-// 5. REAL 3D CHARACTER (CJ MODEL INTEGRATION)
+// 5. PROTAGONIST RIG (CJ.glb WITH BOUNDING BOX AUTO-ELEVATION)
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
@@ -366,24 +366,41 @@ let cjModel = null;
 const gltfLoader = new THREE.GLTFLoader();
 gltfLoader.setPath('./');
 
-// Load CJ.glb as the main protagonist
 gltfLoader.load('CJ.glb', function (gltf) {
   cjModel = gltf.scene;
-  cjModel.scale.set(1.2, 1.2, 1.2);
-  cjModel.position.set(0, 0, 0);
+
+  // Auto-scale and lift up so feet stand precisely on pavement (Y=0)
+  cjModel.updateMatrixWorld(true);
+  const bbox = new THREE.Box3().setFromObject(cjModel);
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+
+  const targetHeight = 1.75; // Standard human height in meters
+  if (size.y > 0) {
+    const scaleFactor = targetHeight / size.y;
+    cjModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+  }
+
+  cjModel.updateMatrixWorld(true);
+  const updatedBox = new THREE.Box3().setFromObject(cjModel);
+  cjModel.position.y = -updatedBox.min.y; // Fixes sinking underground
+
+  const center = new THREE.Vector3();
+  updatedBox.getCenter(center);
+  cjModel.position.x -= center.x;
+  cjModel.position.z -= center.z;
+
   cjModel.traverse(node => {
     if (node.isMesh) {
       node.castShadow = true;
       node.receiveShadow = true;
     }
   });
+
   playerGroup.add(cjModel);
-  console.log("CJ Protagonist loaded successfully!");
+  console.log("CJ model auto-aligned to ground level!");
 }, undefined, function(err) {
-  console.warn("CJ.glb not found, using fallback box character.");
-  const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.4), new THREE.MeshStandardMaterial({ color: 0x2563eb }));
-  box.position.y = 0.85;
-  playerGroup.add(box);
+  console.warn("CJ.glb load error, using fallback.");
 });
 
 let camMode = 0;
@@ -418,7 +435,7 @@ function toggleVehicle() {
       footButtons.style.display = 'none';
       vehiclePedals.style.display = 'flex';
       yaw = currentVehicle.angle;
-      playerGroup.visible = false; // Hide CJ inside car
+      playerGroup.visible = false;
     }
   } else {
     player.x = currentVehicle.x - Math.cos(currentVehicle.angle) * (currentVehicle.radius + 1.2);
@@ -444,7 +461,7 @@ accelBtn.addEventListener('pointerdown', () => pedalGas = true);
 brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(e => brakeBtn.addEventListener(e, () => pedalBrake = false));
 
-// 6. SIMULATION & ANIMATION LOOP
+// 6. SIMULATION LOOP
 function update(dt) {
   animTime += dt;
 
@@ -560,7 +577,7 @@ function update(dt) {
       player.angle = Math.atan2(dx, dz);
 
       if (cjModel) {
-        cjModel.position.y = Math.abs(Math.sin(animTime * 12)) * 0.08; // Bobbing walk
+        cjModel.position.y = Math.abs(Math.sin(animTime * 12)) * 0.08;
       }
 
       if (animTime - lastStepTime > (isRunning ? 0.28 : 0.44)) {
