@@ -48,7 +48,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#38bdf8;fon
   </div>
 
   <div class="top-hud-right">
-    ₹ 25,000
+    ₹ 5000
   </div>
 
   <div id="look"><div class="cross"></div></div>
@@ -411,7 +411,8 @@ gltfLoader.load('character.glb', function (gltf) {
   cjModel = gltf.scene;
   cjModel.scale.set(1.15, 1.15, 1.15);
   
-  cjModel.rotation.set(0, 0, 0);
+  // FIX 1: മോഡലിന്റെ റൊട്ടേഷൻ 180 ഡിഗ്രി തിരിക്കുന്നു (ബാക്കിലോട്ട് പോകുന്ന പ്രശ്നം മാറ്റാൻ)
+  cjModel.rotation.set(0, Math.PI, 0);
   cjModel.updateMatrixWorld(true);
 
   const bbox = new THREE.Box3().setFromObject(cjModel);
@@ -505,7 +506,6 @@ brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 
 // 6. SIMULATION LOOP
 function update(dt) {
-  // ആനിമേഷൻ മിക്സർ എല്ലാ ഫ്രെയ്മിലും അപ്ഡേറ്റ് ചെയ്യുന്നു
   if (mixer) {
     mixer.update(dt);
   }
@@ -605,36 +605,42 @@ function update(dt) {
     camera.lookAt(lookTarget);
 
   } else {
-    // WALKING / RUNNING & NATIVE ANIMATION SPEED SCALING
+    // FIX 2: WALKING / RUNNING & NATIVE ANIMATION SPEED SCALING പൂർണ്ണമായും പുതുക്കിയത്
     const len = Math.hypot(ix, iz);
-    if (len > 1) { ix /= len; iz /= len; }
-    const isMoving = len > 0.05;
+    const isMoving = len > 0.15; // ഡെഡ്-സോൺ കൂട്ടി, അനാവശ്യ തെന്നൽ ഒഴിവാക്കാൻ
     const isRunning = running || k.shift;
-    
-    const speed = isRunning ? 8.0 : 3.5; 
+
+    // തെന്നൽ മാറാൻ കൃത്യമായ സ്പീഡ് അനുപാതം
+    const moveSpeed = isRunning ? 5.2 : 2.4; 
+    const animRate  = isRunning ? 1.4 : 0.9;
 
     if (animAction) {
       if (isMoving) {
-        animAction.paused = false; 
-        animAction.timeScale = isRunning ? 1.5 : 1.0; 
+        animAction.paused = false;
+        animAction.timeScale = animRate;
         if (!animAction.isRunning()) animAction.play();
       } else {
-        animAction.paused = true; 
-        animAction.time = 0; 
+        // നടക്കാത്തപ്പോൾ ആനിമേഷൻ പൂർണ്ണമായും പോസ് ചെയ്യുക
+        animAction.paused = true;
       }
     }
 
     if (isMoving) {
-      const moveAngle = Math.atan2(-ix, -iz) + yaw;
-      const dx = Math.sin(moveAngle) * speed * dt;
-      const dz = Math.cos(moveAngle) * speed * dt;
+      // ജോയ്സ്റ്റിക് ദിശയിലേക്ക് മാത്രം കൃത്യമായി നീങ്ങുക
+      const normX = ix / len;
+      const normZ = iz / len;
+      const moveAngle = Math.atan2(-normX, -normZ) + yaw;
+      
+      const dx = Math.sin(moveAngle) * moveSpeed * dt;
+      const dz = Math.cos(moveAngle) * moveSpeed * dt;
 
       if (!checkCollision(player.x + dx, player.z, player.radius)) player.x += dx;
       if (!checkCollision(player.x, player.z + dz, player.radius)) player.z += dz;
 
+      // ക്യാരക്ടർ നീങ്ങുന്ന അതേ ആംഗിളിലേക്ക് തിരിക്കുക
       player.angle = moveAngle;
 
-      if (performance.now() - lastStepTime > (isRunning ? 280 : 440)) {
+      if (performance.now() - lastStepTime > (isRunning ? 320 : 540)) {
         playFootstep();
         lastStepTime = performance.now();
       }
