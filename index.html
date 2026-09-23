@@ -6,9 +6,9 @@
 <title>Kochi 3D - Clean Asphalt & Seawall Beach</title>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#7fc0ec;font-family:Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
-#game{position:fixed;top:0;left:0;width:100%;height:100%;display:block;z-index:1}
-.hud{position:fixed;inset:0;color:#fff;text-shadow:0 2px 4px #000;pointer-events:none;z-index:10}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#78b9df;font-family:Arial,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;inset:0;color:#fff;text-shadow:0 2px 4px #000;pointer-events:none}
 .top{position:absolute;left:14px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .pill{background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);padding:8px 12px;border-radius:8px;font-weight:800;border:1px solid rgba(255,255,255,0.2)}
 
@@ -71,6 +71,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#7fc0ec;fon
 <script>
 'use strict';
 
+// ==========================================
+// AUDIO SYNTHESIZER
+// ==========================================
 let audioCtx = null;
 let oscBass = null, oscMid = null;
 let engineMaster = null;
@@ -206,6 +209,7 @@ scene.background = new THREE.Color(0x7fc0ec);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 800);
 
+// Sunlight
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3d6642, 0.85);
 scene.add(hemiLight);
 
@@ -214,6 +218,9 @@ dirLight.position.set(100, 160, 80);
 dirLight.castShadow = true;
 scene.add(dirLight);
 
+// ==========================================
+// URBAN KOCHI MAP & SEAWALL BEACH
+// ==========================================
 const BLOCK_SIZE = 70; 
 const ROAD_WIDTH = 14; 
 const HALF_ROAD = ROAD_WIDTH / 2;
@@ -222,6 +229,7 @@ const GRID_MIN = -2;
 const GRID_MAX = 3;  
 const colliders = [];
 
+// Base Ground (Kerala Green Lawn)
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(900, 900),
   new THREE.MeshStandardMaterial({ color: 0x2e6630, roughness: 0.9 })
@@ -230,6 +238,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
+// 1. Animated Ocean Water (Waves)
 const waterGeo = new THREE.PlaneGeometry(280, 900, 16, 16);
 const waterMat = new THREE.MeshStandardMaterial({ 
   color: 0x0c4a6e, 
@@ -243,6 +252,7 @@ ocean.rotation.x = -Math.PI / 2;
 ocean.position.set(-220, 0.2, 0);
 scene.add(ocean);
 
+// 2. Compact Realistic Beach Strip
 const beach = new THREE.Mesh(
   new THREE.PlaneGeometry(28, 900),
   new THREE.MeshStandardMaterial({ color: 0xc89d66, roughness: 0.95 })
@@ -252,6 +262,7 @@ beach.position.set(-66, 0.08, 0);
 beach.receiveShadow = true;
 scene.add(beach);
 
+// 3. Realistic Rock Seawall (കടൽഭിത്തി കല്ലുകൾ)
 const rockMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
 for (let bz = -350; bz <= 350; bz += 5) {
   const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.2, 0), rockMat);
@@ -261,16 +272,20 @@ for (let bz = -350; bz <= 350; bz += 5) {
   scene.add(rock);
 }
 
+// 4. Clean Roads (No clutter, single white dashed center line)
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x1a1e23, roughness: 0.92 });
 const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x78828c, roughness: 0.8 });
 const whiteDashMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 const roadCoords = [];
-for (let i = GRID_MIN; i <= GRID_MAX; i++) roadCoords.push(i * BLOCK_SIZE);
+for (let i = GRID_MIN; i <= GRID_MAX; i++) {
+  roadCoords.push(i * BLOCK_SIZE);
+}
 
 const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 90;
 const CENTER_OFFSET = ((GRID_MAX + GRID_MIN) * BLOCK_SIZE) / 2;
 
+// North-South Roads
 roadCoords.forEach(rx => {
   const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMat);
   rZ.rotation.x = -Math.PI / 2;
@@ -278,6 +293,7 @@ roadCoords.forEach(rx => {
   rZ.receiveShadow = true;
   scene.add(rZ);
 
+  // Sidewalk Curbs
   [-1, 1].forEach(side => {
     const sw = new THREE.Mesh(new THREE.BoxGeometry(SIDEWALK_W, 0.14, TOTAL_SPAN), sidewalkMat);
     sw.position.set(rx + side * (HALF_ROAD + SIDEWALK_W / 2), 0.07, CENTER_OFFSET);
@@ -285,6 +301,7 @@ roadCoords.forEach(rx => {
     scene.add(sw);
   });
 
+  // Only Center White Dashed Line
   for (let z = -250; z <= 300; z += 14) {
     let nearCross = false;
     roadCoords.forEach(cz => {
@@ -299,6 +316,7 @@ roadCoords.forEach(rx => {
   }
 });
 
+// East-West Roads
 roadCoords.forEach(rz => {
   const rX = new THREE.Mesh(new THREE.PlaneGeometry(TOTAL_SPAN, ROAD_WIDTH), roadMat);
   rX.rotation.x = -Math.PI / 2;
@@ -313,7 +331,7 @@ roadCoords.forEach(rz => {
     scene.add(sw);
   });
 
-  for (let x = -250; z <= 300; x += 14) {
+  for (let x = -250; x <= 300; x += 14) {
     let nearCross = false;
     roadCoords.forEach(cx => {
       if (Math.abs(x - cx) < HALF_ROAD + 2) nearCross = true;
@@ -327,6 +345,7 @@ roadCoords.forEach(rz => {
   }
 });
 
+// Kochi Metro Viaduct along Main MG Road (X = 0)
 const pillarMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 });
 const trackMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, metalness: 0.5, roughness: 0.35 });
 
@@ -348,6 +367,7 @@ metroTrack.position.set(0, 7.4, CENTER_OFFSET);
 metroTrack.castShadow = true;
 scene.add(metroTrack);
 
+// Metro Train
 const metroTrain = new THREE.Group();
 const coachBodyMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.3 });
 const coachStripeMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.4 });
@@ -374,6 +394,7 @@ metroTrain.position.set(0, 7.7, 0);
 scene.add(metroTrain);
 let trainSpeed = 22.0;
 
+// Trees (Palms & Canopies)
 const palmTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3e27, roughness: 0.9 });
 const palmLeafMat = new THREE.MeshStandardMaterial({ color: 0x1d6a2a, roughness: 0.6 });
 const treeLeafMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7 });
@@ -410,29 +431,39 @@ function addGardenTree(x, z) {
   scene.add(tree);
 }
 
-for (let z = -280; z <= 300; z += 24) addPalmTree(-50, z);
+// Promenade Palms along the coast
+for (let z = -280; z <= 300; z += 24) {
+  addPalmTree(-50, z);
+}
 
+// Dynamic Billboard Generator
 function createBillboard(text, subtitle, bgColor = '#0f172a', textColor = '#facc15') {
   const bCanvas = document.createElement('canvas');
   bCanvas.width = 512;
   bCanvas.height = 160;
   const ctx = bCanvas.getContext('2d');
+
   ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, 512, 160);
+
   ctx.lineWidth = 8;
   ctx.strokeStyle = textColor;
   ctx.strokeRect(6, 6, 500, 148);
+
   ctx.font = 'bold 44px Arial, sans-serif';
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.fillText(text, 256, 75);
+
   if (subtitle) {
     ctx.font = '600 24px Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.fillText(subtitle, 256, 120);
   }
+
   const texture = new THREE.CanvasTexture(bCanvas);
-  return new THREE.Mesh(new THREE.PlaneGeometry(9.0, 2.8), new THREE.MeshBasicMaterial({ map: texture }));
+  const mat = new THREE.MeshBasicMaterial({ map: texture });
+  return new THREE.Mesh(new THREE.PlaneGeometry(9.0, 2.8), mat);
 }
 
 const kochiLandmarks = [
@@ -450,6 +481,7 @@ const bldgMatA = new THREE.MeshStandardMaterial({ color: 0x0f2b48, metalness: 0.
 const bldgMatB = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.7 });
 const bldgMatC = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6 });
 
+// City Blocks Placement
 for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   for (let bz = GRID_MIN; bz < GRID_MAX; bz++) {
     const lotCenterX = bx * BLOCK_SIZE + BLOCK_SIZE / 2;
@@ -491,6 +523,7 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
 
     addPalmTree(lotCenterX - 18, lotCenterZ - 18);
     addPalmTree(lotCenterX + 18, lotCenterZ + 18);
+
     bGroup.position.set(lotCenterX, 0, lotCenterZ);
     scene.add(bGroup);
 
@@ -502,18 +535,22 @@ for (let bx = GRID_MIN; bx < GRID_MAX; bx++) {
   }
 }
 
+// Ocean Water Collider Barrier
 colliders.push({
   minX: -400, maxX: -82,
   minZ: -450, maxZ: 450,
   w: 318, d: 900, px: -241, pz: 0
 });
 
+// Skid Mark Line Engine
 const skidSegments = [];
-let prevLeftWheel = null, prevRightWheel = null;
+let prevLeftWheel = null;
+let prevRightWheel = null;
 
 function addSkidRibbon(p1, p2) {
   const dist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
   if (dist < 0.1) return;
+
   const midX = (p1.x + p2.x) / 2;
   const midZ = (p1.z + p2.z) / 2;
   const angle = Math.atan2(p2.x - p1.x, p2.z - p1.z);
@@ -521,9 +558,11 @@ function addSkidRibbon(p1, p2) {
   const geo = new THREE.PlaneGeometry(0.34, dist);
   const mat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.65, depthWrite: false });
   const mesh = new THREE.Mesh(geo, mat);
+
   mesh.rotation.x = -Math.PI / 2;
   mesh.rotation.z = -angle;
   mesh.position.set(midX, 0.035, midZ);
+
   scene.add(mesh);
   skidSegments.push({ mesh, life: 5.5 });
 }
@@ -542,7 +581,7 @@ function updateSkidMarks(dt) {
   }
 }
 
-// Character
+// Player Character Rig
 const playerGroup = new THREE.Group();
 scene.add(playerGroup);
 
@@ -607,7 +646,7 @@ shoeR.castShadow = true;
 legR.add(shoeR);
 playerGroup.add(legR);
 
-// Clean Procedural Sports Car
+// Sports Car
 const car = {
   group: new THREE.Group(),
   x: -BLOCK_SIZE + 3.8,
@@ -625,7 +664,12 @@ const carPaint = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.
 const carTrim = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7 });
 const carGlass = new THREE.MeshStandardMaterial({ color: 0x020617, metalness: 0.9, roughness: 0.1 });
 const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.95, roughness: 0.1 });
-const brakeLightMat = new THREE.MeshStandardMaterial({ color: 0x440000, emissive: 0x220000, roughness: 0.3 });
+
+const brakeLightMat = new THREE.MeshStandardMaterial({
+  color: 0x440000,
+  emissive: 0x220000,
+  roughness: 0.3
+});
 
 const mainChassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.48, 4.3), carPaint);
 mainChassis.position.y = 0.46;
@@ -704,6 +748,7 @@ let lastTime = performance.now(), animTime = 0;
 const lookTarget = new THREE.Vector3(0, 1.4, 0);
 
 let camMode = 0;
+
 camera.position.set(player.x, 3.2, player.z - 6.5);
 camera.lookAt(player.x, 1.4, player.z);
 
@@ -787,6 +832,9 @@ accelBtn.addEventListener('pointerdown', () => pedalGas = true);
 brakeBtn.addEventListener('pointerdown', () => pedalBrake = true);
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(e => brakeBtn.addEventListener(e, () => pedalBrake = false));
 
+// ==========================================
+// RADAR MINIMAP
+// ==========================================
 const miniCanvas = document.getElementById('minimap');
 const mCtx = miniCanvas.getContext('2d');
 const MAP_ZOOM = 0.38; 
@@ -797,6 +845,7 @@ function renderRotatingMinimap() {
   const activeAngle = inCar ? car.angle : player.angle;
 
   mCtx.clearRect(0, 0, 120, 120);
+
   mCtx.fillStyle = '#225227';
   mCtx.fillRect(0, 0, 120, 120);
 
@@ -804,12 +853,15 @@ function renderRotatingMinimap() {
   mCtx.translate(60, 60);
   mCtx.rotate(activeAngle);
 
+  // Ocean Water
   mCtx.fillStyle = '#0c4a6e';
   mCtx.fillRect((-220 - activeX) * MAP_ZOOM - (140 * MAP_ZOOM), -(-450 - activeZ) * MAP_ZOOM, 280 * MAP_ZOOM, -900 * MAP_ZOOM);
 
+  // Compact Beach
   mCtx.fillStyle = '#c89d66';
   mCtx.fillRect((-66 - activeX) * MAP_ZOOM - (14 * MAP_ZOOM), -(-450 - activeZ) * MAP_ZOOM, 28 * MAP_ZOOM, -900 * MAP_ZOOM);
 
+  // Roads Network
   mCtx.fillStyle = '#1a1e23';
   roadCoords.forEach(rx => {
     mCtx.fillRect((rx - activeX) * MAP_ZOOM - (ROAD_WIDTH * MAP_ZOOM) / 2, -(-400 - activeZ) * MAP_ZOOM, ROAD_WIDTH * MAP_ZOOM, -TOTAL_SPAN * MAP_ZOOM);
@@ -818,12 +870,15 @@ function renderRotatingMinimap() {
     mCtx.fillRect((-300 - activeX) * MAP_ZOOM, -(rz - activeZ) * MAP_ZOOM - (ROAD_WIDTH * MAP_ZOOM) / 2, TOTAL_SPAN * MAP_ZOOM, ROAD_WIDTH * MAP_ZOOM);
   });
 
+  // Metro Blue Track Line
   mCtx.fillStyle = '#2563eb';
   mCtx.fillRect((0 - activeX) * MAP_ZOOM - 1.5, -(-400 - activeZ) * MAP_ZOOM, 3, -TOTAL_SPAN * MAP_ZOOM);
 
+  // Metro Train Marker
   mCtx.fillStyle = '#06b6d4';
   mCtx.fillRect((metroTrain.position.x - activeX) * MAP_ZOOM - 2.5, -(metroTrain.position.z - activeZ) * MAP_ZOOM - 12, 5, 24);
 
+  // Buildings
   mCtx.fillStyle = '#475569';
   colliders.forEach(c => {
     if (c.w > 40) return;
@@ -832,6 +887,7 @@ function renderRotatingMinimap() {
     mCtx.fillRect(bx - (c.w * MAP_ZOOM) / 2, bz - (c.d * MAP_ZOOM) / 2, c.w * MAP_ZOOM, c.d * MAP_ZOOM);
   });
 
+  // Parked Car Marker
   if (!inCar) {
     const cx = (car.x - activeX) * MAP_ZOOM;
     const cz = -(car.z - activeZ) * MAP_ZOOM;
@@ -846,6 +902,7 @@ function renderRotatingMinimap() {
 
   mCtx.restore();
 
+  // Fixed Center Arrow
   mCtx.save();
   mCtx.translate(60, 60);
   mCtx.fillStyle = inCar ? '#ef4444' : '#facc15';
@@ -868,8 +925,10 @@ function update(dt) {
   animTime += dt;
   updateSkidMarks(dt);
 
+  // Ocean Gentle Wave Motion
   ocean.position.y = 0.2 + Math.sin(animTime * 2.5) * 0.08;
 
+  // Metro Train Loop
   metroTrain.position.z += trainSpeed * dt;
   if (metroTrain.position.z > 240) {
     metroTrain.position.z = 240;
@@ -996,6 +1055,7 @@ function update(dt) {
     car.group.position.set(car.x, 0, car.z);
     car.group.rotation.y = car.angle;
 
+    // Camera
     let targetCamX, targetCamY, targetCamZ;
     let targetLookX = car.x, targetLookY = 1.4, targetLookZ = car.z;
 
@@ -1124,6 +1184,7 @@ function update(dt) {
   renderRotatingMinimap();
 }
 
+// Input Handlers
 window.keys = {};
 addEventListener('keydown', e => window.keys[e.key.toLowerCase()] = true);
 addEventListener('keyup', e => window.keys[e.key.toLowerCase()] = false);
