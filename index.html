@@ -197,7 +197,6 @@ for (let i = GRID_MIN; i <= GRID_MAX; i++) roadCoords.push(i * BLOCK_SIZE);
 const TOTAL_SPAN = (GRID_MAX - GRID_MIN) * BLOCK_SIZE + 220;
 const CENTER_OFFSET = ((GRID_MAX + GRID_MIN) * BLOCK_SIZE) / 2;
 
-// Road Network
 roadCoords.forEach(rx => {
   const rZ = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, TOTAL_SPAN), roadMatZ);
   rZ.rotation.x = -Math.PI / 2;
@@ -342,16 +341,16 @@ function createSportsCar(x, z) {
   return v;
 }
 
-// REAL SPORTS BIKE WITH ACCURATE SCALING & REALISTIC PROPORTIONS
+// REAL SPORTS BIKE (KAWASAKI H2R) WITH PROPER SEAT ANCHOR & WHEEL NODES
 function createSportsBike(x, z) {
   const v = {
     type: 'bike',
     group: new THREE.Group(),
     x: x, z: z,
     speed: 0, maxSpeed: 48, accel: 38, friction: 7.0, angle: 0,
-    radius: 1.4,
-    wheels: [],
-    steerNode: null,
+    radius: 1.2,
+    wheelsFront: [],
+    wheelsBack: [],
     sound: { bass: 55, bassR: 160, mid: 120, midR: 320 }
   };
 
@@ -361,68 +360,50 @@ function createSportsBike(x, z) {
   const gltfLoader = new THREE.GLTFLoader();
   gltfLoader.setPath('./');
 
-  function tryLoadBike(fileName, fallback) {
-    gltfLoader.load(fileName, function (gltf) {
-      const model = gltf.scene;
-      
-      model.updateMatrixWorld(true);
-      const bbox = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      bbox.getSize(size);
+  gltfLoader.load('bike.glb', function (gltf) {
+    const model = gltf.scene;
+    
+    // Normalize scale for accurate human proportionality
+    model.updateMatrixWorld(true);
+    const bbox = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
 
-      // Target real motorcycle length: ~2.45 meters (True to human scale)
-      const maxDim = Math.max(size.x, size.y, size.z);
-      if (maxDim > 0) {
-        const targetScale = 2.45 / maxDim;
-        model.scale.set(targetScale, targetScale, targetScale);
-      }
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0) {
+      const targetScale = 2.4 / maxDim;
+      model.scale.set(targetScale, targetScale, targetScale);
+    }
 
-      // Re-adjust ground height after scale
-      model.updateMatrixWorld(true);
-      const updatedBox = new THREE.Box3().setFromObject(model);
-      model.position.y = -updatedBox.min.y;
+    model.updateMatrixWorld(true);
+    const updatedBox = new THREE.Box3().setFromObject(model);
+    model.position.y = -updatedBox.min.y;
 
-      // Center X and Z
-      const center = new THREE.Vector3();
-      updatedBox.getCenter(center);
-      model.position.x -= center.x;
-      model.position.z -= center.z;
+    const center = new THREE.Vector3();
+    updatedBox.getCenter(center);
+    model.position.x -= center.x;
+    model.position.z -= center.z;
 
-      model.traverse(node => {
-        if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = true;
-          const name = node.name.toLowerCase();
-          if (name.includes('wheel') || name.includes('tire')) {
-            v.wheels.push(node);
-          }
+    model.traverse(node => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+        const name = node.name.toLowerCase();
+        if (name.includes('wheel') || name.includes('tire') || name.includes('object_')) {
+          // Automatic wheel detection for rolling animation
+          if (node.position.z > 0) v.wheelsFront.push(node);
+          else v.wheelsBack.push(node);
         }
-      });
-
-      bikeContainer.add(model);
-      v.modelNode = model;
-      console.log(fileName + " auto-scaled and mounted at natural human proportion!");
-    }, undefined, fallback);
-  }
-
-  tryLoadBike('bike.glb', function() {
-    tryLoadBike('sports_bike.glb', function() {
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.75, 2.2), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.3 }));
-      frame.position.y = 0.75;
-      bikeContainer.add(frame);
-
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.15, 0.75), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
-      seat.position.set(0, 0.95, -0.22);
-      bikeContainer.add(seat);
-
-      [[0, 0.42, 1.1], [0, 0.42, -1.0]].forEach((pos) => {
-        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 16), new THREE.MeshStandardMaterial({ color: 0x111827 }));
-        w.rotation.z = Math.PI / 2;
-        w.position.set(...pos);
-        bikeContainer.add(w);
-        v.wheels.push(w);
-      });
+      }
     });
+
+    bikeContainer.add(model);
+    console.log("Kawasaki Ninja H2R loaded successfully!");
+  }, undefined, function() {
+    // Fallback
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 2.0), new THREE.MeshStandardMaterial({ color: 0x16a34a }));
+    frame.position.y = 0.7;
+    bikeContainer.add(frame);
   });
 
   v.group.position.set(v.x, 0, v.z);
@@ -430,7 +411,6 @@ function createSportsBike(x, z) {
   return v;
 }
 
-// Spawns: Car on Right lane, Bike on Left lane directly in front of the player
 vehicles.push(createSportsCar(-BLOCK_SIZE + 4.5, 14));
 vehicles.push(createSportsBike(-BLOCK_SIZE - 4.5, 14));
 
@@ -565,22 +545,19 @@ function toggleVehicle() {
         scene.remove(playerGroup);
         currentVehicle.group.add(playerGroup);
 
-        // REALISTIC SUPERBIKE SEATED ERGONOMICS (NATURAL FIT TO SEAT & TANK)
-        playerGroup.position.set(0, 0.28, -0.15);
+        // PERFECT H2R RIDER ERGONOMICS (LOWERED SADDLE FIT)
+        playerGroup.position.set(0, 0.42, -0.18);
         playerGroup.rotation.set(0, 0, 0);
-        pelvis.position.y = 0.58;
+        pelvis.position.y = 0.44;
 
-        // Chest leans aggressively over fuel tank
-        torsoMesh.rotation.x = 0.52;
-        head.rotation.x = -0.32; // Look up ahead
+        torsoMesh.rotation.x = 0.65; // Deep tuck over tank
+        head.rotation.x = -0.38;     // Helmet up looking forward
 
-        // Hands angled forward onto clip-on handlebars
-        armL.rotation.set(-0.95, 0.32, -0.35);
-        armR.rotation.set(-0.95, -0.32, 0.35);
+        armL.rotation.set(-1.05, 0.38, -0.42);
+        armR.rotation.set(-1.05, -0.38, 0.42);
 
-        // Legs bent naturally backward on rear-set footpegs
-        legL.rotation.set(-1.45, 0.38, -0.22);
-        legR.rotation.set(-1.45, -0.38, 0.22);
+        legL.rotation.set(-1.35, 0.32, -0.15);
+        legR.rotation.set(-1.35, -0.32, 0.15);
       } else {
         playerGroup.visible = false;
       }
@@ -590,7 +567,6 @@ function toggleVehicle() {
       currentVehicle.group.remove(playerGroup);
       scene.add(playerGroup);
 
-      // Restore standing posture
       pelvis.position.y = 0.92;
       torsoMesh.rotation.x = 0;
       head.rotation.x = 0;
@@ -682,7 +658,6 @@ function update(dt) {
       const turnRate = cv.type === 'bike' ? 2.6 : 2.0;
       cv.angle -= steer * turnRate * dir * dt;
 
-      // Realistic Superbike Banking into high-speed corners
       if (cv.type === 'bike') {
         cv.group.rotation.z = -steer * 0.42 * Math.min(1, Math.abs(cv.speed) / 14);
       }
@@ -696,7 +671,7 @@ function update(dt) {
       if (cv.type === 'bike') cv.group.rotation.z = 0;
     }
 
-    // Wheel Roll & Steer Animations
+    // Wheel Roll & Steering Animation Fix
     const rollSpeed = (cv.speed * dt) / 0.38;
     if (cv.wheelsFront) {
       cv.wheelsFront.forEach(w => {
@@ -706,11 +681,6 @@ function update(dt) {
     }
     if (cv.wheelsBack) {
       cv.wheelsBack.forEach(w => {
-        w.rotation.x += rollSpeed;
-      });
-    }
-    if (cv.wheels) {
-      cv.wheels.forEach(w => {
         w.rotation.x += rollSpeed;
       });
     }
